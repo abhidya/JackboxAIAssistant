@@ -358,20 +358,20 @@
             color: #fecaca;
         }
 
-        .request-log {
+        .telemetry-log {
             border: 1px solid #334155;
             border-radius: 18px;
             overflow: hidden;
             margin-bottom: 18px;
         }
 
-        .request-log table {
+        .telemetry-log table {
             width: 100%;
             border-collapse: collapse;
         }
 
-        .request-log th,
-        .request-log td {
+        .telemetry-log th,
+        .telemetry-log td {
             padding: 12px 14px;
             text-align: left;
             border-bottom: 1px solid rgba(148, 163, 184, 0.08);
@@ -379,7 +379,7 @@
             font-size: 0.92rem;
         }
 
-        .request-log th {
+        .telemetry-log th {
             background: rgba(15, 23, 42, 0.95);
             color: #cbd5e1;
         }
@@ -656,7 +656,7 @@
         <form method="post" action="{{ url_for('create_session') }}" class="card launcher">
             <div class="launcher-hero">
                 <h2>3-step room setup</h2>
-                <p>Build the lobby in order: enter the room, choose how many bots you want, then pick that many character cards.</p>
+                <p>Set the room code, choose the bot count, then select the exact cast for the lobby.</p>
                 <div class="step-tabs">
                     <span class="step-tab">Step 1 · Room</span>
                     <span class="step-tab">Step 2 · Count</span>
@@ -666,7 +666,7 @@
 
             <section class="step-screen active" data-step-screen="1">
                 <h3>Step 1: room details</h3>
-                <p>Start with the live Jackbox code and optional session title. The model is applied to every AI player you create in this room.</p>
+                <p>Enter the live Jackbox room code, pick the Ollama model, and add an optional label for the session.</p>
                 <div class="field-grid">
                     <div>
                         <label for="room_code">Room code</label>
@@ -678,11 +678,11 @@
                     </div>
                     <div>
                         <label for="title">Session title</label>
-                        <input id="title" name="title" placeholder="Friday stream room">
+                        <input id="title" name="title" placeholder="Optional room label">
                     </div>
                 </div>
                 <div class="wizard-footer">
-                    <span class="counter-pill">Live rooms work best when the lobby is already open and waiting for players.</span>
+                    <span class="counter-pill">Make sure the lobby is open and accepting players before you start the bots.</span>
                     <button type="button" data-next-step="2">Next: player count</button>
                 </div>
             </section>
@@ -706,7 +706,7 @@
 
             <section class="step-screen" data-step-screen="3">
                 <h3>Step 3: pick characters</h3>
-                <p>The counter below updates as you select cards. The backend still validates the count before creating the session.</p>
+                <p>Select exactly the number of character cards shown below.</p>
                 <div class="counter-pill">
                     Selected characters:
                     <strong><span id="selected-character-count">0</span></strong>
@@ -739,7 +739,7 @@
             <div class="section-header">
                 <div>
                     <h2>Sessions console</h2>
-                    <p>Sessions are hidden behind this tab so the launcher stays clean. Use this view to start, stop, host, inspect, delete rooms, and watch dependency health.</p>
+                    <p>Manage active rooms, control host actions, inspect bot state, and review dependency health.</p>
                 </div>
             </div>
 
@@ -779,12 +779,12 @@
                     <div class="meta">Failures: {{ dependency_metrics.per_dependency.ai.failure_count }}</div>
                 </div>
                 <div class="telemetry-card">
-                    <div class="meta">What is tracked</div>
-                    <div class="meta">Jackbox joins, answer/vote submits, host clicks, browser launch/quit, and Ollama generation calls.</div>
+                    <div class="meta">Tracked operations</div>
+                    <div class="meta">Room joins, answer and vote submits, host clicks, browser launch and shutdown, and Ollama generation calls.</div>
                 </div>
             </div>
 
-            <div class="request-log">
+            <div class="telemetry-log">
                 <table>
                     <thead>
                     <tr>
@@ -928,12 +928,12 @@
 
     <section id="prompt-panel" class="panel {% if active_panel == 'prompt' %}active{% endif %}">
         <div class="card prompt-shell">
-            <div class="section-header">
-                <div>
-                    <h2>Prompt Lab</h2>
-                    <p>Preview a character’s answer style without waiting for a live Quiplash round.</p>
+                <div class="section-header">
+                    <div>
+                        <h2>Prompt Lab</h2>
+                        <p>Preview a character voice and prompt shape before a live Quiplash round starts.</p>
+                    </div>
                 </div>
-            </div>
 
             <form method="post" action="{{ url_for('generate') }}" id="prompt-lab-form">
                 <div class="field-grid">
@@ -952,11 +952,11 @@
                     </div>
                 </div>
 
-                <label for="prompt_task">Prompt task</label>
-                <textarea id="prompt_task" name="prompt_task" placeholder="Example: Answer the Quiplash prompt 'A terrible thing to hear from your Uber driver'">{{ generated_prompt_task }}</textarea>
+                <label for="prompt_task">Prompt</label>
+                <textarea id="prompt_task" name="prompt_task" placeholder="Example: A terrible thing to hear at work">{{ generated_prompt_task }}</textarea>
 
                 <div class="wizard-footer">
-                    <span class="counter-pill">Use this tab to inspect character style and prompt shaping before a live game.</span>
+                    <span class="counter-pill">Review the exact prompt and candidate answers before using a model live.</span>
                     <button type="submit" id="prompt-submit-button">Generate quotes</button>
                 </div>
             </form>
@@ -976,7 +976,7 @@
             {% if generated_full_prompt %}
                 <div class="prompt-request-box">
                     <h3>Full request prompt</h3>
-                    <div class="meta">This is the exact system/user prompt block currently being sent to Ollama for this Prompt Lab run.</div>
+                    <div class="meta">Exact system and user prompt content sent to Ollama for this run.</div>
                     <pre>{{ generated_full_prompt }}</pre>
                 </div>
             {% endif %}

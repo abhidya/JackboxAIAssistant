@@ -170,8 +170,10 @@ class SessionManager:
 
     def start_player(self, session_id, player_id):
         session = self._get_session(session_id)
+        player = self._get_player(session, player_id)
         if not self._start_player_if_needed(session, player_id):
             raise ValueError("Player is already running or starting.")
+        return player.username
 
     def stop_player(self, session_id, player_id):
         session = self._get_session(session_id)
@@ -181,6 +183,7 @@ class SessionManager:
         player.bot.stop()
         player.status = "stopped"
         player.logs.append("Bot stop requested.")
+        return player.username
 
     def generate_preview(self, persona, prompt_task, model):
         full_prompt, candidates = generate_quote_candidates(

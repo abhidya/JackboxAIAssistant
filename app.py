@@ -1,4 +1,5 @@
 import os
+import secrets
 import socket
 
 from flask import Flask, flash, redirect, render_template, request, url_for
@@ -10,7 +11,11 @@ from session_manager import SessionManager
 
 def create_app():
     app = Flask(__name__)
-    app.config["SECRET_KEY"] = os.environ.get("JACKBOX_SECRET_KEY", "jackbox-local-dev")
+    app.config["SECRET_KEY"] = (
+        os.environ.get("JACKBOX_SECRET_KEY")
+        or os.environ.get("SECRET_KEY")
+        or secrets.token_hex(32)
+    )
     manager = SessionManager()
 
     def render_index(
@@ -133,21 +138,21 @@ def create_app():
     @app.post("/sessions/<session_id>/players/<player_id>/start")
     def start_player(session_id, player_id):
         try:
-            manager.start_player(session_id, player_id)
+            username = manager.start_player(session_id, player_id)
         except ValueError as exc:
             flash(str(exc), "error")
         else:
-            flash("Player started.", "success")
+            flash(f"Started {username}.", "success")
         return redirect(url_for("index", panel="sessions"))
 
     @app.post("/sessions/<session_id>/players/<player_id>/stop")
     def stop_player(session_id, player_id):
         try:
-            manager.stop_player(session_id, player_id)
+            username = manager.stop_player(session_id, player_id)
         except ValueError as exc:
             flash(str(exc), "error")
         else:
-            flash("Player stopped.", "success")
+            flash(f"Stopped {username}.", "success")
         return redirect(url_for("index", panel="sessions"))
 
     @app.post("/generate")
@@ -199,12 +204,12 @@ def _resolve_port(preferred_port, host="0.0.0.0", attempts=20):
 
 
 def main():
-    host = "0.0.0.0"
+    host = os.environ.get("HOST", "127.0.0.1")
     preferred_port = int(os.environ.get("PORT", "7000"))
     resolved_port = _resolve_port(preferred_port, host=host)
     if resolved_port != preferred_port:
         print(f"Port {preferred_port} is in use. Starting on port {resolved_port} instead.")
-    app.run(host=host, port=resolved_port, debug=False)
+    app.run(host=host, port=resolved_port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

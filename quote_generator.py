@@ -6,8 +6,8 @@ from functools import lru_cache
 import ollama
 
 from dependency_telemetry import track_dependency_call
+
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
-# DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "gemma3n:e2b")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 emotions = ["angry", "excited", "depressed", "sarcastic", "confused", "manic", "paranoid"]
 
