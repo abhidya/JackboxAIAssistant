@@ -1,0 +1,1078 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jackbox AI Lobby</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #0b1020;
+            --panel: rgba(15, 23, 42, 0.84);
+            --panel-2: rgba(17, 24, 39, 0.94);
+            --border: rgba(148, 163, 184, 0.18);
+            --text: #e5e7eb;
+            --muted: #94a3b8;
+            --blue: #60a5fa;
+            --purple: #a78bfa;
+            --green: #22c55e;
+            --red: #f87171;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Inter, Arial, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(96, 165, 250, 0.16), transparent 28%),
+                radial-gradient(circle at top right, rgba(167, 139, 250, 0.16), transparent 30%),
+                linear-gradient(180deg, #08101f 0%, #111827 100%);
+            color: var(--text);
+        }
+
+        .page {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 24px 40px;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 18px 0 14px;
+            background: linear-gradient(180deg, rgba(8, 16, 31, 0.96), rgba(8, 16, 31, 0.72));
+            backdrop-filter: blur(12px);
+        }
+
+        .brand h1 {
+            margin: 0 0 4px;
+            font-size: 1.8rem;
+        }
+
+        .brand p {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav button {
+            appearance: none;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.78);
+            color: var(--text);
+            border-radius: 999px;
+            padding: 10px 16px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .nav button.active {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            border-color: transparent;
+        }
+
+        .flash-stack {
+            margin: 8px 0 18px;
+        }
+
+        .flash {
+            padding: 12px 14px;
+            border-radius: 14px;
+            margin-bottom: 10px;
+            border: 1px solid transparent;
+        }
+
+        .flash.success {
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.36);
+        }
+
+        .flash.error {
+            background: rgba(248, 113, 113, 0.12);
+            border-color: rgba(248, 113, 113, 0.36);
+        }
+
+        .panel {
+            display: none;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+            backdrop-filter: blur(12px);
+        }
+
+        .launcher {
+            overflow: hidden;
+        }
+
+        .launcher-hero {
+            padding: 28px 28px 10px;
+        }
+
+        .launcher-hero h2 {
+            margin: 0 0 10px;
+            font-size: 2.4rem;
+        }
+
+        .launcher-hero p {
+            margin: 0;
+            color: #cbd5e1;
+            max-width: 760px;
+            font-size: 1.05rem;
+        }
+
+        .step-tabs {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 18px;
+        }
+
+        .step-tab {
+            border: 1px solid rgba(96, 165, 250, 0.18);
+            color: #bfdbfe;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
+
+        .step-screen {
+            display: none;
+            min-height: calc(100vh - 250px);
+            padding: 28px;
+            border-top: 1px solid rgba(148, 163, 184, 0.08);
+        }
+
+        .step-screen.active {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .step-screen h3 {
+            margin: 0 0 8px;
+            font-size: 1.7rem;
+        }
+
+        .step-screen p {
+            margin: 0 0 18px;
+            color: var(--muted);
+            max-width: 700px;
+        }
+
+        .field-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 14px;
+        }
+
+        label {
+            display: block;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        input, textarea, select, button {
+            width: 100%;
+            border-radius: 14px;
+            border: 1px solid #475569;
+            background: #0f172a;
+            color: var(--text);
+            padding: 12px 14px;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 140px;
+            resize: vertical;
+        }
+
+        button {
+            cursor: pointer;
+            border: none;
+            font-weight: 800;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+        }
+
+        button.secondary {
+            background: #374151;
+        }
+
+        button.ghost {
+            background: transparent;
+            border: 1px solid var(--border);
+        }
+
+        .wizard-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .wizard-footer button {
+            width: auto;
+            min-width: 180px;
+        }
+
+        .counter-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(148, 163, 184, 0.08);
+            color: #cbd5e1;
+            padding: 10px 14px;
+            font-size: 0.92rem;
+            margin-bottom: 18px;
+        }
+
+        .character-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+            gap: 14px;
+            margin-top: 14px;
+        }
+
+        .character-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .character-card {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 8px;
+            padding: 18px 12px;
+            border-radius: 20px;
+            border: 1px solid #334155;
+            background: var(--panel-2);
+            transition: 0.16s ease;
+            cursor: pointer;
+        }
+
+        .character-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--blue);
+        }
+
+        .character-option input:checked + .character-card {
+            border-color: var(--blue);
+            background: linear-gradient(180deg, rgba(37, 99, 235, 0.24), rgba(124, 58, 237, 0.22));
+            box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.36);
+        }
+
+        .character-icon {
+            width: 56px;
+            height: 56px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.14);
+            font-size: 1.8rem;
+        }
+
+        .character-name {
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .sessions-shell,
+        .prompt-shell {
+            padding: 22px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .section-header p {
+            margin: 6px 0 0;
+            color: var(--muted);
+        }
+
+        .session-list {
+            display: grid;
+            gap: 18px;
+        }
+
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .telemetry-card {
+            border: 1px solid #334155;
+            border-radius: 18px;
+            padding: 14px;
+            background: rgba(17, 24, 39, 0.86);
+        }
+
+        .telemetry-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-top: 6px;
+        }
+
+        .telemetry-value.success {
+            color: #bbf7d0;
+        }
+
+        .telemetry-value.failure {
+            color: #fecaca;
+        }
+
+        .request-log {
+            border: 1px solid #334155;
+            border-radius: 18px;
+            overflow: hidden;
+            margin-bottom: 18px;
+        }
+
+        .request-log table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .request-log th,
+        .request-log td {
+            padding: 12px 14px;
+            text-align: left;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+            vertical-align: top;
+            font-size: 0.92rem;
+        }
+
+        .request-log th {
+            background: rgba(15, 23, 42, 0.95);
+            color: #cbd5e1;
+        }
+
+        .request-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 4px 8px;
+            font-size: 0.78rem;
+            font-weight: 800;
+        }
+
+        .request-status.success {
+            color: #bbf7d0;
+            background: rgba(34, 197, 94, 0.12);
+            border: 1px solid rgba(34, 197, 94, 0.35);
+        }
+
+        .request-status.failure {
+            color: #fecaca;
+            background: rgba(248, 113, 113, 0.12);
+            border: 1px solid rgba(248, 113, 113, 0.35);
+        }
+
+        .session-card {
+            border: 1px solid #334155;
+            border-radius: 20px;
+            padding: 18px;
+            background: rgba(15, 23, 42, 0.7);
+        }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .session-header h3 {
+            margin: 0;
+        }
+
+        .meta {
+            color: var(--muted);
+            font-size: 0.93rem;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .action-row form {
+            flex: 1 1 150px;
+        }
+
+        .session-info {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .info-box {
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 14px;
+            background: rgba(17, 24, 39, 0.8);
+        }
+
+        .info-box strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .player-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .player-card {
+            border: 1px solid #334155;
+            border-radius: 18px;
+            padding: 14px;
+            background: rgba(17, 24, 39, 0.88);
+        }
+
+        .player-title {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .player-title .character-icon {
+            width: 42px;
+            height: 42px;
+            font-size: 1.3rem;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            font-size: 0.84rem;
+            margin: 6px 0 10px;
+        }
+
+        .status-pill.running {
+            color: #bbf7d0;
+            border-color: rgba(34, 197, 94, 0.35);
+            background: rgba(34, 197, 94, 0.12);
+        }
+
+        .status-pill.error {
+            color: #fecaca;
+            border-color: rgba(248, 113, 113, 0.35);
+            background: rgba(248, 113, 113, 0.12);
+        }
+
+        .player-detail {
+            margin-top: 8px;
+            color: #cbd5e1;
+            font-size: 0.92rem;
+        }
+
+        .host-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            color: #ddd6fe;
+            background: rgba(167, 139, 250, 0.14);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+
+        details {
+            margin-top: 10px;
+        }
+
+        summary {
+            cursor: pointer;
+            color: #cbd5e1;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        .empty {
+            padding: 26px;
+            text-align: center;
+            color: var(--muted);
+            border: 1px dashed #334155;
+            border-radius: 18px;
+        }
+
+        .prompt-request-box {
+            margin-top: 18px;
+            border: 1px solid #334155;
+            border-radius: 18px;
+            padding: 16px;
+            background: rgba(17, 24, 39, 0.82);
+        }
+
+        .prompt-request-box pre {
+            margin: 12px 0 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.88rem;
+            line-height: 1.45;
+            color: #dbeafe;
+        }
+
+        .loading-box {
+            display: none;
+            margin-top: 18px;
+            border-radius: 18px;
+            border: 1px solid rgba(96, 165, 250, 0.24);
+            background: rgba(37, 99, 235, 0.12);
+            padding: 16px;
+        }
+
+        .loading-box.active {
+            display: block;
+        }
+
+        .loading-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+        }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            border: 2px solid rgba(191, 219, 254, 0.3);
+            border-top-color: #bfdbfe;
+            animation: spin 0.9s linear infinite;
+        }
+
+        .loading-meta {
+            margin-top: 8px;
+            color: #cbd5e1;
+            font-size: 0.92rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 980px) {
+            .field-grid,
+            .session-info,
+            .telemetry-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .topbar {
+                flex-direction: column;
+                align-items: start;
+            }
+
+            .step-screen {
+                min-height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <header class="topbar">
+        <div class="brand">
+            <h1>Jackbox AI Lobby</h1>
+            <p>Launch rooms, manage live bot browsers, and test prompt generation without digging through one giant page.</p>
+        </div>
+        <nav class="nav">
+            <button type="button" class="{% if active_panel == 'launch' %}active{% endif %}" data-panel-target="launch-panel">Launch</button>
+            <button type="button" class="{% if active_panel == 'sessions' %}active{% endif %}" data-panel-target="sessions-panel">Sessions</button>
+            <button type="button" class="{% if active_panel == 'prompt' %}active{% endif %}" data-panel-target="prompt-panel">Prompt Lab</button>
+        </nav>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="flash-stack">
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <section id="launch-panel" class="panel {% if active_panel == 'launch' %}active{% endif %}">
+        <form method="post" action="{{ url_for('create_session') }}" class="card launcher">
+            <div class="launcher-hero">
+                <h2>3-step room setup</h2>
+                <p>Build the lobby in order: enter the room, choose how many bots you want, then pick that many character cards.</p>
+                <div class="step-tabs">
+                    <span class="step-tab">Step 1 · Room</span>
+                    <span class="step-tab">Step 2 · Count</span>
+                    <span class="step-tab">Step 3 · Characters</span>
+                </div>
+            </div>
+
+            <section class="step-screen active" data-step-screen="1">
+                <h3>Step 1: room details</h3>
+                <p>Start with the live Jackbox code and optional session title. The model is applied to every AI player you create in this room.</p>
+                <div class="field-grid">
+                    <div>
+                        <label for="room_code">Room code</label>
+                        <input id="room_code" name="room_code" placeholder="ABCD" required>
+                    </div>
+                    <div>
+                        <label for="model">Ollama model</label>
+                        <input id="model" name="model" value="{{ default_model }}" placeholder="{{ default_model }}">
+                    </div>
+                    <div>
+                        <label for="title">Session title</label>
+                        <input id="title" name="title" placeholder="Friday stream room">
+                    </div>
+                </div>
+                <div class="wizard-footer">
+                    <span class="counter-pill">Live rooms work best when the lobby is already open and waiting for players.</span>
+                    <button type="button" data-next-step="2">Next: player count</button>
+                </div>
+            </section>
+
+            <section class="step-screen" data-step-screen="2">
+                <h3>Step 2: choose AI player count</h3>
+                <p>Pick how many bots you want to add. In the next step you’ll choose the exact same number of character cards.</p>
+                <div style="max-width: 320px;">
+                    <label for="ai_player_count">AI players</label>
+                    <select id="ai_player_count" name="ai_player_count" required>
+                        {% for count in range(1, 9) %}
+                            <option value="{{ count }}">{{ count }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="wizard-footer">
+                    <button type="button" class="ghost" data-prev-step="1">Back</button>
+                    <button type="button" data-next-step="3">Next: characters</button>
+                </div>
+            </section>
+
+            <section class="step-screen" data-step-screen="3">
+                <h3>Step 3: pick characters</h3>
+                <p>The counter below updates as you select cards. The backend still validates the count before creating the session.</p>
+                <div class="counter-pill">
+                    Selected characters:
+                    <strong><span id="selected-character-count">0</span></strong>
+                    /
+                    <strong><span id="selected-character-target">1</span></strong>
+                </div>
+
+                <div class="character-grid">
+                    {% for persona in persona_catalog %}
+                        <label class="character-option">
+                            <input type="checkbox" name="personas" value="{{ persona.name }}">
+                            <span class="character-card">
+                                <span class="character-icon">{{ persona.icon }}</span>
+                                <span class="character-name">{{ persona.short_name }}</span>
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+
+                <div class="wizard-footer">
+                    <button type="button" class="ghost" data-prev-step="2">Back</button>
+                    <button type="submit">Create session</button>
+                </div>
+            </section>
+        </form>
+    </section>
+
+    <section id="sessions-panel" class="panel {% if active_panel == 'sessions' %}active{% endif %}">
+        <div class="card sessions-shell">
+            <div class="section-header">
+                <div>
+                    <h2>Sessions console</h2>
+                    <p>Sessions are hidden behind this tab so the launcher stays clean. Use this view to start, stop, host, inspect, delete rooms, and watch dependency health.</p>
+                </div>
+            </div>
+
+            <div class="telemetry-grid">
+                <div class="telemetry-card">
+                    <div class="meta">Dependency calls</div>
+                    <div class="telemetry-value">{{ dependency_metrics.total }}</div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="meta">Successful</div>
+                    <div class="telemetry-value success">{{ dependency_metrics.success_count }}</div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="meta">Failed</div>
+                    <div class="telemetry-value failure">{{ dependency_metrics.failure_count }}</div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="meta">Avg latency</div>
+                    <div class="telemetry-value">{{ dependency_metrics.average_latency_ms }} ms</div>
+                </div>
+            </div>
+
+            <div class="telemetry-grid">
+                <div class="telemetry-card">
+                    <div class="meta">Jackbox calls</div>
+                    <div class="telemetry-value">{{ dependency_metrics.per_dependency.jackbox.total }}</div>
+                    <div class="meta">Failures: {{ dependency_metrics.per_dependency.jackbox.failure_count }}</div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="meta">Browser control</div>
+                    <div class="telemetry-value">{{ dependency_metrics.per_dependency.browser.total }}</div>
+                    <div class="meta">Failures: {{ dependency_metrics.per_dependency.browser.failure_count }}</div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="meta">AI calls</div>
+                    <div class="telemetry-value">{{ dependency_metrics.per_dependency.ai.total }}</div>
+                    <div class="meta">Failures: {{ dependency_metrics.per_dependency.ai.failure_count }}</div>
+                </div>
+                <div class="telemetry-card">
+                    <div class="meta">What is tracked</div>
+                    <div class="meta">Jackbox joins, answer/vote submits, host clicks, browser launch/quit, and Ollama generation calls.</div>
+                </div>
+            </div>
+
+            <div class="request-log">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Dependency</th>
+                        <th>Operation</th>
+                        <th>Status</th>
+                        <th>Latency</th>
+                        <th>Details</th>
+                        <th>Failure</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% if dependency_metrics.entries %}
+                        {% for entry in dependency_metrics.entries %}
+                            <tr>
+                                <td>{{ entry.timestamp }}</td>
+                                <td>{{ entry.dependency }}</td>
+                                <td>{{ entry.operation }}</td>
+                                <td>
+                                    <span class="request-status {% if entry.success %}success{% else %}failure{% endif %}">
+                                        {% if entry.success %}success{% else %}failed{% endif %}
+                                    </span>
+                                </td>
+                                <td>{{ entry.latency_ms }} ms</td>
+                                <td>{{ entry.details or "—" }}</td>
+                                <td>{{ entry.error or "—" }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="meta">No dependency calls tracked yet.</td>
+                        </tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if sessions %}
+                <div class="session-list">
+                    {% for session in sessions %}
+                        <article class="session-card">
+                            <div class="session-header">
+                                <div>
+                                    <h3>{{ session.title }}</h3>
+                                    <div class="meta">Room code: <strong>{{ session.room_code }}</strong> · Players: {{ session.player_count }}</div>
+                                </div>
+                                <div class="action-row" style="min-width: min(100%, 660px);">
+                                    <form method="post" action="{{ url_for('start_session', session_id=session.id) }}">
+                                        <button type="submit">Start all</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('click_everyones_in', session_id=session.id) }}">
+                                        <button type="submit">Everyone's In</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('stop_session', session_id=session.id) }}">
+                                        <button type="submit" class="secondary">Stop all</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('delete_session', session_id=session.id) }}">
+                                        <button type="submit" class="ghost">Delete session</button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="session-info">
+                                <div class="info-box">
+                                    <strong>Host control owner</strong>
+                                    <div class="meta">{{ session.host_player or "No running bot currently exposes Everyone's In" }}</div>
+                                </div>
+                                <div class="info-box">
+                                    <strong>Session actions</strong>
+                                    <div class="meta">Use <strong>Everyone's In</strong> after at least one bot is running and the host control is visible.</div>
+                                </div>
+                                <div class="info-box">
+                                    <strong>Bot visibility</strong>
+                                    <div class="meta">Prompts and responses appear per player below when the game advances.</div>
+                                </div>
+                            </div>
+
+                            {% if session.players %}
+                                <div class="player-grid">
+                                    {% for player in session.players %}
+                                        <article class="player-card">
+                                            <div class="player-title">
+                                                <span class="character-icon">{{ player.icon }}</span>
+                                                <div>
+                                                    <strong>{{ player.username }}</strong>
+                                                    <div class="meta">{{ player.persona }}</div>
+                                                </div>
+                                            </div>
+
+                                            <div class="status-pill {{ player.status }}">{{ player.status|capitalize }}</div>
+                                            <div class="meta">Model: {{ player.model }}</div>
+
+                                            {% if player.has_host_controls %}
+                                                <div class="host-badge">Host controls available here</div>
+                                            {% endif %}
+
+                                            {% if player.last_prompt %}
+                                                <div class="player-detail"><strong>Last prompt:</strong> {{ player.last_prompt }}</div>
+                                            {% endif %}
+                                            {% if player.last_response %}
+                                                <div class="player-detail"><strong>Last response:</strong> {{ player.last_response }}</div>
+                                            {% endif %}
+                                            {% if player.error %}
+                                                <div class="flash error" style="margin-top:10px;">{{ player.error }}</div>
+                                            {% endif %}
+
+                                            <div class="action-row" style="margin-top:12px;">
+                                                <form method="post" action="{{ url_for('start_player', session_id=session.id, player_id=player.id) }}">
+                                                    <button type="submit">Start</button>
+                                                </form>
+                                                <form method="post" action="{{ url_for('stop_player', session_id=session.id, player_id=player.id) }}">
+                                                    <button type="submit" class="secondary">Stop</button>
+                                                </form>
+                                            </div>
+
+                                            {% if player.logs %}
+                                                <details>
+                                                    <summary>Recent logs</summary>
+                                                    <ul>
+                                                        {% for log in player.logs %}
+                                                            <li>{{ log }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                </details>
+                                            {% endif %}
+                                        </article>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="empty">No players are attached to this session.</div>
+                            {% endif %}
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty">No sessions yet. Create one from the Launch tab.</div>
+            {% endif %}
+        </div>
+    </section>
+
+    <section id="prompt-panel" class="panel {% if active_panel == 'prompt' %}active{% endif %}">
+        <div class="card prompt-shell">
+            <div class="section-header">
+                <div>
+                    <h2>Prompt Lab</h2>
+                    <p>Preview a character’s answer style without waiting for a live Quiplash round.</p>
+                </div>
+            </div>
+
+            <form method="post" action="{{ url_for('generate') }}" id="prompt-lab-form">
+                <div class="field-grid">
+                    <div>
+                        <label for="persona">Persona</label>
+                        <select id="persona" name="persona">
+                            <option value="">Choose a persona</option>
+                            {% for persona in personas %}
+                                <option value="{{ persona }}" {% if generated_persona == persona %}selected{% endif %}>{{ persona }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="prompt-model">Ollama model</label>
+                        <input id="prompt-model" name="model" value="{{ generated_model or default_model }}" placeholder="{{ default_model }}">
+                    </div>
+                </div>
+
+                <label for="prompt_task">Prompt task</label>
+                <textarea id="prompt_task" name="prompt_task" placeholder="Example: Answer the Quiplash prompt 'A terrible thing to hear from your Uber driver'">{{ generated_prompt_task }}</textarea>
+
+                <div class="wizard-footer">
+                    <span class="counter-pill">Use this tab to inspect character style and prompt shaping before a live game.</span>
+                    <button type="submit" id="prompt-submit-button">Generate quotes</button>
+                </div>
+            </form>
+
+            <div class="loading-box" id="prompt-loading-box">
+                <div class="loading-title">
+                    <span class="spinner"></span>
+                    <span>Sending prompt to Ollama...</span>
+                </div>
+                <div class="loading-meta">
+                    Persona: <strong id="prompt-loading-persona">—</strong><br>
+                    Model: <strong id="prompt-loading-model">—</strong><br>
+                    Elapsed: <strong id="prompt-loading-elapsed">0.0s</strong>
+                </div>
+            </div>
+
+            {% if generated_full_prompt %}
+                <div class="prompt-request-box">
+                    <h3>Full request prompt</h3>
+                    <div class="meta">This is the exact system/user prompt block currently being sent to Ollama for this Prompt Lab run.</div>
+                    <pre>{{ generated_full_prompt }}</pre>
+                </div>
+            {% endif %}
+
+            {% if generated_candidates %}
+                <div style="margin-top: 22px;">
+                    <h3>Generated candidates</h3>
+                    <ul>
+                        {% for candidate in generated_candidates %}
+                            <li>{{ candidate }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<script>
+    const panels = document.querySelectorAll('.panel');
+    const navButtons = document.querySelectorAll('[data-panel-target]');
+
+    function showPanel(targetId) {
+        panels.forEach(panel => panel.classList.toggle('active', panel.id === targetId));
+        navButtons.forEach(button => button.classList.toggle('active', button.dataset.panelTarget === targetId));
+    }
+
+    navButtons.forEach(button => {
+        button.addEventListener('click', () => showPanel(button.dataset.panelTarget));
+    });
+
+    const stepScreens = document.querySelectorAll('[data-step-screen]');
+    function showStep(stepNumber) {
+        stepScreens.forEach(screen => screen.classList.toggle('active', screen.dataset.stepScreen === String(stepNumber)));
+    }
+
+    document.querySelectorAll('[data-next-step]').forEach(button => {
+        button.addEventListener('click', () => showStep(button.dataset.nextStep));
+    });
+
+    document.querySelectorAll('[data-prev-step]').forEach(button => {
+        button.addEventListener('click', () => showStep(button.dataset.prevStep));
+    });
+
+    const countSelect = document.getElementById('ai_player_count');
+    const selectedCount = document.getElementById('selected-character-count');
+    const selectedTarget = document.getElementById('selected-character-target');
+    const characterCheckboxes = document.querySelectorAll('input[name="personas"]');
+
+    function updateCharacterCount() {
+        if (selectedTarget) {
+            selectedTarget.textContent = countSelect.value;
+        }
+        if (selectedCount) {
+            selectedCount.textContent = [...characterCheckboxes].filter(box => box.checked).length;
+        }
+    }
+
+    if (countSelect) {
+        countSelect.addEventListener('change', updateCharacterCount);
+    }
+    characterCheckboxes.forEach(box => box.addEventListener('change', updateCharacterCount));
+    updateCharacterCount();
+
+    const promptLabForm = document.getElementById('prompt-lab-form');
+    const promptLoadingBox = document.getElementById('prompt-loading-box');
+    const promptSubmitButton = document.getElementById('prompt-submit-button');
+    const promptLoadingPersona = document.getElementById('prompt-loading-persona');
+    const promptLoadingModel = document.getElementById('prompt-loading-model');
+    const promptLoadingElapsed = document.getElementById('prompt-loading-elapsed');
+
+    if (promptLabForm) {
+        promptLabForm.addEventListener('submit', () => {
+            const personaSelect = document.getElementById('persona');
+            const modelInput = document.getElementById('prompt-model');
+            const selectedPersona = personaSelect?.value || 'Unknown';
+            const selectedModel = modelInput?.value || 'Unknown';
+            const startedAt = Date.now();
+
+            promptLoadingPersona.textContent = selectedPersona;
+            promptLoadingModel.textContent = selectedModel;
+            promptLoadingElapsed.textContent = '0.0s';
+            promptLoadingBox.classList.add('active');
+            promptSubmitButton.disabled = true;
+            promptSubmitButton.textContent = 'Generating...';
+
+            const timer = window.setInterval(() => {
+                const elapsedSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+                promptLoadingElapsed.textContent = `${elapsedSeconds}s`;
+            }, 100);
+
+            window.addEventListener('pageshow', () => {
+                window.clearInterval(timer);
+            }, { once: true });
+        });
+    }
+</script>
+</body>
+</html>
