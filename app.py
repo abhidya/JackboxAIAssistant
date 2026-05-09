@@ -6,7 +6,9 @@ from flask import Flask, flash, redirect, render_template, request, url_for
 
 from dependency_telemetry import dependency_tracker
 from quote_generator import DEFAULT_MODEL, PERSONA_OPTIONS, get_persona_catalog
+from quote_generator_avatars import CHARACTER_AVATARS
 from session_manager import SessionManager
+from model_provider import get_available_providers, get_default_model
 
 
 def create_app():
@@ -18,28 +20,32 @@ def create_app():
     )
     manager = SessionManager()
 
-    def render_index(
-        active_panel="launch",
-        generated_candidates=None,
-        generated_prompt_task="",
-        generated_persona="",
-        generated_model=DEFAULT_MODEL,
-        generated_full_prompt="",
-    ):
-        return render_template(
-            "index.html",
-            personas=PERSONA_OPTIONS,
-            persona_catalog=get_persona_catalog(),
-            sessions=manager.list_sessions(),
-            default_model=DEFAULT_MODEL,
-            active_panel=active_panel,
-            generated_candidates=generated_candidates or [],
-            generated_prompt_task=generated_prompt_task,
-            generated_persona=generated_persona,
-            generated_model=generated_model,
-            generated_full_prompt=generated_full_prompt,
-            dependency_metrics=dependency_tracker.snapshot(),
-        )
+def render_index(
+    active_panel="launch",
+    generated_candidates=None,
+    generated_prompt_task="",
+    generated_persona="",
+    generated_model=DEFAULT_MODEL,
+    generated_full_prompt="",
+):
+    providers = get_available_providers()
+    default_provider, _ = get_default_model()
+    return render_template(
+        "index.html",
+        personas=PERSONA_OPTIONS,
+        persona_catalog=get_persona_catalog(),
+        sessions=manager.list_sessions(),
+        default_model=DEFAULT_MODEL,
+        active_panel=active_panel,
+        generated_candidates=generated_candidates or [],
+        generated_prompt_task=generated_prompt_task,
+        generated_persona=generated_persona,
+        generated_model=generated_model,
+        generated_full_prompt=generated_full_prompt,
+        dependency_metrics=dependency_tracker.snapshot(),
+        available_providers=providers,
+        default_provider=default_provider,
+    )
 
     @app.get("/")
     def index():
@@ -58,25 +64,27 @@ def create_app():
             flash("Room code is required.", "error")
             return redirect(url_for("index"))
 
-        if not ai_player_count.isdigit():
-            flash("Choose how many AI players you want.", "error")
-            return redirect(url_for("index"))
+if not ai_player_count.isdigit():
+    flash("Choose how many AI players you want.", "error")
+    return redirect(url_for("index"))
 
-        ai_player_count = int(ai_player_count)
-        if ai_player_count < 1:
-            flash("You need at least one AI player.", "error")
-            return redirect(url_for("index"))
+ai_player_count = int(ai_player_count)
+if ai_player_count < 1:
+    flash("You need at least one AI player.", "error")
+    return redirect(url_for("index"))
 
-        if len(selected_personas) != ai_player_count:
-            flash(f"Pick exactly {ai_player_count} character(s).", "error")
-            return redirect(url_for("index"))
+provider_name = request.form.get("provider", "").strip() or get_default_model()[0]
 
-        session = manager.create_session(room_code=room_code, title=title)
-        manager.add_persona_players(session.id, selected_personas, model)
-        flash(f"Session created for room {room_code} with {ai_player_count} AI player(s).", "success")
-        return redirect(url_for("index", panel="sessions"))
+if len(selected_personas) != ai_player_count:
+    flash(f"Pick exactly {ai_player_count} character(s).", "error")
+    return redirect(url_for("index"))
 
-    @app.post("/sessions/<session_id>/players")
+session = manager.create_session(room_code=room_code, title=title)
+manager.add_persona_players(session.id, selected_personas, model, provider_name)
+flash(f"Session created for room {room_code} with {ai_player_count} AI player(s).", "success")
+return redirect(url_for("index", panel="sessions"))
+
+@app.post("/sessions/<session_id>/players")
     def add_players(session_id):
         raw_players = request.form.get("players_text", "")
         default_persona = request.form.get("default_persona", "").strip()

@@ -15,13 +15,14 @@ from quote_generator import generate_quote_candidates
 
 
 class QuiplashBot:
-    def __init__(self, room_code, username, persona, model, cast_members, event_callback):
+    def __init__(self, room_code, username, persona, model, cast_members, event_callback, provider_name="ollama"):
         self.room_code = room_code
         self.username = username
         self.persona = persona
         self.model = model
         self.cast_members = cast_members
         self.event_callback = event_callback
+        self.provider_name = provider_name
         self.stop_event = threading.Event()
         self.thread = None
         self.browser = None
@@ -211,6 +212,7 @@ class QuiplashBot:
             persona=self.persona,
             prompt_task=prompt_task,
             model=self.model,
+            provider_name=self.provider_name,
             cast_members=self.cast_members,
         )
         return candidates

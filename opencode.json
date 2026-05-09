@@ -1,0 +1,19 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "koboldcpp/koboldcpp/gemma-4-31B-it-Q4_K_M",
+  "provider": {
+    "koboldcpp": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "KoboldCpp Local",
+      "options": {
+        "baseURL": "http://10.0.0.205:5001/v1",
+        "apiKey": "koboldcpp"
+      },
+      "models": {
+        "koboldcpp/gemma-4-31B-it-Q4_K_M": {
+          "name": "Gemma 4 31B Q4_K_M"
+        }
+      }
+    }
+  }
+}

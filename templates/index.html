@@ -676,6 +676,13 @@
                         <label for="model">Ollama model</label>
                         <input id="model" name="model" value="{{ default_model }}" placeholder="{{ default_model }}">
                     </div>
+    <div>
+      <label for="provider">AI Provider</label>
+      <select id="provider" name="provider" style="width: 100%; border-radius: 14px; border: 1px solid #334155; background: #0f172a; color: var(--text); padding: 12px 14px; font: inherit;">
+        <option value="ollama" selected>Ollama (Local)</option>
+        <option value="nvidia">NVIDIA (Cloud)</option>
+      </select>
+    </div>
                     <div>
                         <label for="title">Session title</label>
                         <input id="title" name="title" placeholder="Optional room label">
@@ -717,11 +724,16 @@
                 <div class="character-grid">
                     {% for persona in persona_catalog %}
                         <label class="character-option">
-                            <input type="checkbox" name="personas" value="{{ persona.name }}">
-                            <span class="character-card">
-                                <span class="character-icon">{{ persona.icon }}</span>
-                                <span class="character-name">{{ persona.short_name }}</span>
-                            </span>
+              <input type="checkbox" name="personas" value="{{ persona.name }}">
+              <span class="character-card">
+                {% if persona.avatar_path %}
+                <img src="{{ persona.avatar_path }}" alt="{{ persona.name }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" style="width: 56px; height: 56px; border-radius: 999px;">
+                <span class="character-icon" style="display: none;">{{ persona.icon }}</span>
+                {% else %}
+                <span class="character-icon">{{ persona.icon }}</span>
+                {% endif %}
+                <span class="character-name">{{ persona.short_name }}</span>
+              </span>
                         </label>
                     {% endfor %}
                 </div>
@@ -863,15 +875,20 @@
                                 </div>
                             </div>
 
-                            {% if session.players %}
-                                <div class="player-grid">
-                                    {% for player in session.players %}
-                                        <article class="player-card">
-                                            <div class="player-title">
-                                                <span class="character-icon">{{ player.icon }}</span>
-                                                <div>
-                                                    <strong>{{ player.username }}</strong>
-                                                    <div class="meta">{{ player.persona }}</div>
+          {% if session.players %}
+          <div class="player-grid">
+            {% for player in session.players %}
+            <article class="player-card">
+              <div class="player-title">
+                {% if player.avatar_path %}
+                <img src="{{ player.avatar_path }}" alt="{{ player.persona }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" style="width: 42px; height: 42px; border-radius: 999px;">
+                <span class="character-icon" style="display: none;">{{ player.icon }}</span>
+                {% else %}
+                <span class="character-icon">{{ player.icon }}</span>
+                {% endif %}
+                <div>
+                  <strong>{{ player.username }}</strong>
+                  <div class="meta">{{ player.persona }}</div>
                                                 </div>
                                             </div>
 

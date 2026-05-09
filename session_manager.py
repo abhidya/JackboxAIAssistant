@@ -3,6 +3,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from quote_generator import CHARACTER_ICONS, DEFAULT_MODEL, generate_quote_candidates
+from quote_generator_avatars import CHARACTER_AVATARS
 from selenium_bots import QuiplashBot
 
 
@@ -12,6 +13,7 @@ class PlayerRecord:
     username: str
     persona: str
     model: str = DEFAULT_MODEL
+    provider_name: str = "ollama"
     status: str = "pending"
     logs: list[str] = field(default_factory=list)
     last_prompt: str = ""
@@ -59,6 +61,7 @@ class SessionManager:
                             "username": player.username,
                             "persona": player.persona,
                             "icon": CHARACTER_ICONS.get(player.persona, "🎤"),
+                            "avatar_path": CHARACTER_AVATARS.get(player.persona, None),
                             "model": player.model,
                             "status": player.status,
                             "has_host_controls": bool(player.bot and player.status == "running" and player.bot.has_everyones_in_control()),
@@ -110,7 +113,7 @@ class SessionManager:
             raise ValueError("No valid player names were provided.")
         return added
 
-    def add_persona_players(self, session_id, personas, model):
+    def add_persona_players(self, session_id, personas, model, provider_name=None):
         session = self._get_session(session_id)
         if not personas:
             raise ValueError("Select at least one character.")
@@ -133,6 +136,7 @@ class SessionManager:
                     username=username,
                     persona=persona,
                     model=model or DEFAULT_MODEL,
+                    provider_name=provider_name or "ollama",
                 )
                 added += 1
         return added
