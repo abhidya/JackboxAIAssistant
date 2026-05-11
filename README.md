@@ -1,176 +1,117 @@
-# Jackbox AI Assistant
+# Jackbox AI Assistant — GitHub Pages Edition
 
-Local web app for running AI-controlled Jackbox players with **Ollama** and **Selenium**.
+This repository is now **GitHub Pages-first**. The main app is a static website (`index.html`, `app.js`, `styles.css`) with an installable Tampermonkey/Greasemonkey connector (`jackbox-ai-connector.user.js`). No Flask server, Ollama daemon, Selenium process, or hosted backend is required for the default workflow.
 
-This project opens a browser UI where you can:
+## What this version does
 
-- create a Jackbox room session
-- choose how many AI players to add
-- assign exact character personas to each bot
-- start and stop bots per session or per player
-- trigger **Everybody's In** from the detected host browser
-- inspect prompts, responses, logs, and dependency telemetry
-- use **Prompt Lab** to preview character answers before a live game
+- Hosts a static assistant dashboard on GitHub Pages.
+- Lets users install a userscript connector for `https://jackbox.tv/*`.
+- Injects a compact assistant panel into Jackbox.
+- Detects visible Quiplash-style prompts in the Jackbox page.
+- Generates short persona answers in the browser with either the built-in static generator or an optional WebLLM in-browser model.
+- Fills and submits answers through the real Jackbox page DOM.
+- Can optionally click random votes and the visible **Everyone's In** control.
 
-## Current stack
+## What changed from the old local app
 
-- **Flask** web server
-- **Ollama** for local model inference
-- **Selenium + Chrome** for browser automation against `jackbox.tv`
+| Old local app | Pages edition |
+| --- | --- |
+| Flask routes and Jinja templates | Static `index.html` + `app.js` |
+| Python in-memory sessions | Browser `localStorage` state |
+| Selenium-controlled Chrome | Userscript DOM automation in the user's Jackbox tab |
+| Ollama / cloud provider calls | Browser-local generator contract; optional WebLLM runtime |
+| Local dependency telemetry | Connector event log in the dashboard |
 
-The default model is `llama3.1:8b`.
+The old Python files are kept in the repo as reference/migration history, but the deployable product is the static app.
 
-## Requirements
+## User setup workflow
 
-- Python 3.10+
-- Google Chrome installed locally
-- Ollama installed and running
+1. Open the deployed GitHub Pages site.
+2. Install a userscript manager:
+   - Tampermonkey for Chrome/Edge/Firefox, or
+   - Greasemonkey/Violentmonkey where preferred.
+3. Click **Install connector** on the site. This opens `jackbox-ai-connector.user.js` in the userscript manager.
+4. Open `https://jackbox.tv`.
+5. The connector injects a **Jackbox AI Assistant** panel into the bottom-right of the `jackbox.tv` page.
+6. Enter room code, player name, persona, style, and automation settings.
+7. Click **Fill/join room** or join manually.
+8. When a prompt appears, the connector sends it to the embedded dashboard, receives an answer, and submits it if auto-submit is enabled.
 
-Python packages are listed in `requirements.txt`:
+One browser tab represents one AI player. Open more Jackbox tabs/windows for more bots.
 
-- Flask
-- ollama
-- selenium
+The top-level GitHub Pages site is mainly the installer/docs dashboard. It cannot directly control a separate `jackbox.tv` tab by itself; the actual automation controls must be used from the panel injected on `jackbox.tv`.
 
-## Quick start
+## Deploy to GitHub Pages
 
-1. Install Python dependencies:
+This repo includes `.github/workflows/pages.yml`.
 
-   ```bash
-   python3 -m pip install -r requirements.txt
-   ```
-
-2. Start Ollama if it is not already running:
-
-   ```bash
-   ollama serve
-   ```
-
-3. Pull the default model:
-
-   ```bash
-   ollama pull llama3.1:8b
-   ```
-
-4. Start the app:
-
-   ```bash
-   python3 app.py
-   ```
-
-5. Open the printed local URL in your browser. By default the app starts on `127.0.0.1:7000` and will automatically move to the next free port if that port is already in use.
-
-You can also launch through:
+1. Push to `main`.
+2. In GitHub repo settings, enable **Pages** with **GitHub Actions** as the source.
+3. The workflow runs:
 
 ```bash
-python3 gui.py
+npm run check
+npm run build
 ```
 
-`gui.py` is just a thin compatibility entrypoint that starts the Flask app.
+and publishes `dist/`.
 
-## How to use it
-
-### Launch tab
-
-1. Enter the live Jackbox room code.
-2. Choose the Ollama model.
-3. Pick the bot count.
-4. Select exactly that many character cards.
-5. Create the session.
-
-### Sessions tab
-
-From the Sessions console you can:
-
-- start all bots in a room
-- stop all bots
-- start or stop individual players
-- click **Everyone's In**
-- delete a session
-- inspect each player's:
-  - status
-  - last prompt
-  - last response
-  - recent logs
-  - current error
-
-The app detects which running bot currently has the host control and uses that browser when you click **Everyone's In**.
-
-### Prompt Lab
-
-Prompt Lab lets you:
-
-- pick a persona
-- enter a Quiplash-style prompt
-- choose an Ollama model
-- inspect the exact prompt sent to Ollama
-- review generated candidate answers before using them in a live room
-
-## Environment variables
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `HOST` | `127.0.0.1` | Flask bind host |
-| `PORT` | `7000` | Preferred starting port |
-| `SECRET_KEY` | generated at startup | Flask secret key |
-| `JACKBOX_SECRET_KEY` | unset | Preferred explicit Flask secret key |
-| `OLLAMA_MODEL` | `llama3.1:8b` | Default Ollama model |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `JACKBOX_HEADLESS` | `1` | Run Chrome headless when set to `1` |
-| `JACKBOX_USER_AGENT` | built-in Chrome UA | Override the user agent used by Selenium |
-
-Example:
+For a manual local bundle:
 
 ```bash
-HOST=0.0.0.0 PORT=7000 OLLAMA_MODEL=llama3.1:8b python3 app.py
+npm run check
+npm run build
 ```
 
-## Notes on Jackbox automation
+Serve locally:
 
-- Bots join `https://jackbox.tv` with Selenium.
-- Headless mode is enabled by default.
-- The bot tries to dismiss the cookie banner before joining or clicking host controls.
-- Bot answers are generated in-character and include awareness of the other cast members in the same session.
-- The prompt generator enforces short Quiplash-style outputs and filters invalid responses.
+```bash
+npm run serve
+# open http://127.0.0.1:4173/
+```
 
-## Dependency telemetry
-
-The Sessions dashboard shows telemetry for the critical external dependencies this app relies on:
-
-- **Jackbox** interactions like room join, answer submission, voting, and host control clicks
-- **Browser** automation actions like launching and shutting down Chrome
-- **AI** calls to Ollama
-
-Each event records:
-
-- success or failure
-- latency
-- operation name
-- basic context details
-- error text when a dependency call fails
-
-## Project structure
+## Static app files
 
 | Path | Purpose |
 | --- | --- |
-| `app.py` | Flask app and routes |
-| `session_manager.py` | In-memory session and player lifecycle management |
-| `selenium_bots.py` | Jackbox browser automation worker |
-| `quote_generator.py` | Ollama prompt building and answer generation |
-| `dependency_telemetry.py` | Dependency call tracking and summaries |
-| `templates/index.html` | Main UI |
-| `gui.py` | Compatibility entrypoint |
+| `index.html` | GitHub Pages dashboard and embedded connector panel UI |
+| `styles.css` | Static dashboard styling |
+| `app.js` | Persona catalog, prompt generation, bridge protocol, local state |
+| `jackbox-ai-connector.user.js` | Tampermonkey/Greasemonkey automation connector for `jackbox.tv` |
+| `Assets/avatars/` | Optional persona avatar images |
+| `scripts/build-static.js` | Copies deployable static files into `dist/` |
+| `scripts/check-static.js` | Syntax/wiring smoke check |
+
+## Connector bridge protocol
+
+The userscript has a self-contained fallback panel, so it works even if the embedded Pages iframe is blocked or not available. When possible, it also injects the dashboard as an iframe with `?embedded=1` and exchanges `window.postMessage` messages.
+
+Connector → dashboard:
+
+- `JBA_READY` — connector loaded on `jackbox.tv`.
+- `JBA_PROMPT` — visible prompt detected; includes `prompt` and `promptId`.
+- `JBA_LOG` — status/debug message.
+
+Dashboard → connector:
+
+- `JBA_CONFIG` — persona/style/autosubmit/autovote settings.
+- `JBA_ANSWER` — generated answer for a prompt.
+- `JBA_JOIN` — fill room code/player name and click Join.
+- `JBA_EVERYONES_IN` — click the visible host start control.
+
+## Client-side LLM upgrade point
+
+`app.js` includes two client-side generation paths:
+
+- **Built-in static generator** — immediate, zero download, useful as a reliable fallback.
+- **WebLLM in-browser model** — selected from the dashboard with a model id such as `Llama-3.2-1B-Instruct-q4f16_1-MLC`; it dynamically loads `@mlc-ai/web-llm` in browsers with WebGPU support.
+
+Both paths preserve the same `JBA_PROMPT` → `JBA_ANSWER` message contract, so a future Transformers.js or bundled-model adapter can replace `answerPrompt(prompt)` without changing the userscript.
 
 ## Limitations
 
-- Session data is stored in memory only.
-- There is no persistent database yet.
-- There is no automated test suite yet.
-- Runtime quality and speed depend heavily on the selected Ollama model and local machine resources.
-- Jackbox DOM changes can break Selenium selectors over time.
-
-## Development notes
-
-- Keep Ollama running locally before starting a live room.
-- If bots fail to join, confirm the lobby is live and still accepting players.
-- If the default port is busy, the app will choose the next available local port automatically.
+- This automates the visible `jackbox.tv` page; it does not call private Jackbox APIs.
+- Jackbox DOM changes can require selector updates in `jackbox-ai-connector.user.js`.
+- One tab is one bot. True multi-bot isolation is easier with a local Playwright companion, not a pure userscript.
+- Browser/userscript permissions and extension policies vary by browser.
+- WebLLM requires WebGPU and model downloads; unsupported browsers automatically fall back to the built-in generator.

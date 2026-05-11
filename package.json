@@ -1,0 +1,12 @@
+{
+  "name": "jackbox-ai-assistant-pages",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Pages-first Jackbox AI Assistant with a Tampermonkey/Greasemonkey connector.",
+  "scripts": {
+    "build": "node scripts/build-static.js",
+    "serve": "python3 -m http.server 4173",
+    "check": "node scripts/check-static.js"
+  },
+  "devDependencies": {}
+}
