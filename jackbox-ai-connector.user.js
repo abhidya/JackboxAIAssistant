@@ -1,10 +1,17 @@
 // ==UserScript==
 // @name         Jackbox AI Assistant Connector
 // @namespace    https://github.com/pages/jackbox-ai-assistant
-// @version      1.1.0
-// @description  Runs an autonomous Jackbox assistant panel directly on jackbox.tv, with optional GitHub Pages dashboard embedding.
+// @version      1.2.0
+// @description  Bridges the GitHub Pages dashboard to a Jackbox tab and runs the autonomous Jackbox assistant panel.
 // @match        https://jackbox.tv/*
+// @match        https://abhidya.github.io/JackboxAIAssistant/
+// @match        https://abhidya.github.io/JackboxAIAssistant/*
 // @grant        GM_info
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_addValueChangeListener
+// @grant        GM.getValue
+// @grant        GM.setValue
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -13,13 +20,19 @@
 
   const SOURCE = "jackbox-ai-connector";
   const DASHBOARD_SOURCE = "jackbox-ai-dashboard";
+  const TO_DASHBOARD_KEY = "jba:bridge:to-dashboard";
+  const TO_JACKBOX_KEY = "jba:bridge:to-jackbox";
+  const HEARTBEAT_KEY = "jba:bridge:jackbox-heartbeat";
+  const CONTEXT_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const DASHBOARD_URL_PATTERN = /^https:\/\/abhidya\.github\.io\/JackboxAIAssistant\/?/;
+  const isDashboardPage = DASHBOARD_URL_PATTERN.test(location.href);
+  const isJackboxPage = location.hostname === "jackbox.tv";
   const PERSONAS = [
     ["Scooby-Doo (Scooby-Doo)", "Ruh-roh"], ["Rickety Cricket (It's Always Sunny in Philadelphia)", "Hips and nips"], ["Donald Trump (Real Life)", "tremendous"], ["Hillary Clinton (Real Life)", "Pokemon GO"], ["Shaquille O'Neal (Real Life)", "BBQ chicken"], ["MrBeast (YouTube)", "I bought"], ["Deadpool (Marvel Comics)", "Chimichangas"], ["Doraemon (Anime)", "4D pocket"], ["Minions (Despicable Me)", "Banana"], ["SpongeBob SquarePants (SpongeBob)", "I'm ready"], ["Pikachu (Pokémon)", "Pika pika"], ["Groot (Guardians of the Galaxy)", "I am Groot"], ["Stitch (Lilo & Stitch)", "Meega"], ["Harley Quinn (DC Comics)", "Hiya puddin'"], ["Shrek (Shrek)", "my swamp"], ["Genie (Aladdin)", "cosmic powers"], ["Homer Simpson (The Simpsons)", "D'oh"], ["Jack Sparrow (Pirates of the Caribbean)", "rum"], ["Tony Stark (Marvel)", "I am Iron Man"], ["Ron Swanson (Parks and Recreation)", "End of speech"], ["Michael Scott (The Office)", "That's what she said"], ["Hermione Granger (Harry Potter)", "Honestly"], ["Captain Jack Harkness (Doctor Who)", "Never miss a good time"], ["The Joker (DC Comics)", "Why so serious"], ["Rick Sanchez (Rick and Morty)", "*Burp*"], ["Austin Powers (Austin Powers franchise)", "Yeah baby"]
   ];
   const DEFAULT_CONFIG = { persona: "Scooby-Doo (Scooby-Doo)", style: "balanced", autosubmit: true, autovote: false, roomCode: "", playerName: "ScoobyDooBot" };
   const state = {
     iframe: null,
-    useIframe: false,
     config: loadConfig(),
     lastPromptId: "",
     lastVoteSignature: "",
@@ -37,6 +50,63 @@
 
   function saveConfig() {
     localStorage.setItem("jba:connector-config", JSON.stringify(state.config));
+  }
+
+  function hasUserscriptStorageBridge() {
+    return (typeof GM_setValue === "function" && typeof GM_getValue === "function") || (typeof GM === "object" && typeof GM.setValue === "function" && typeof GM.getValue === "function");
+  }
+
+  function getBridgeValue(key, fallback = "") {
+    if (typeof GM_getValue === "function") return GM_getValue(key, fallback);
+    if (typeof GM === "object" && typeof GM.getValue === "function") return GM.getValue(key, fallback);
+    return fallback;
+  }
+
+  function setBridgeValue(key, value) {
+    if (typeof GM_setValue === "function") return GM_setValue(key, value);
+    if (typeof GM === "object" && typeof GM.setValue === "function") return GM.setValue(key, value);
+    return undefined;
+  }
+
+  function publishBridgeMessage(key, payload) {
+    if (!hasUserscriptStorageBridge()) return;
+    try {
+      setBridgeValue(key, JSON.stringify({ id: `${CONTEXT_ID}:${Date.now()}:${Math.random()}`, from: CONTEXT_ID, payload }));
+    } catch (error) {
+      console.warn("[Jackbox AI] Bridge publish failed", error);
+    }
+  }
+
+  function parseBridgeEnvelope(raw) {
+    if (!raw) return null;
+    try {
+      const message = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (!message || message.from === CONTEXT_ID || !message.payload) return null;
+      return message.payload;
+    } catch {
+      return null;
+    }
+  }
+
+  function subscribeToBridge(key, handler) {
+    if (!hasUserscriptStorageBridge()) return;
+    if (typeof GM_addValueChangeListener === "function") {
+      GM_addValueChangeListener(key, (_name, _oldValue, newValue) => {
+        const payload = parseBridgeEnvelope(newValue);
+        if (payload) handler(payload);
+      });
+      return;
+    }
+    let lastValue = "";
+    Promise.resolve(getBridgeValue(key, "")).then((value) => { lastValue = value; });
+    window.setInterval(() => {
+      Promise.resolve(getBridgeValue(key, "")).then((nextValue) => {
+        if (nextValue === lastValue) return;
+        lastValue = nextValue;
+        const payload = parseBridgeEnvelope(nextValue);
+        if (payload) handler(payload);
+      });
+    }, 500);
   }
 
   function assistantUrl() {
@@ -79,8 +149,30 @@
   }
 
   function postToDashboard(payload) {
-    if (!state.iframe || !state.iframe.contentWindow) return;
-    state.iframe.contentWindow.postMessage({ source: SOURCE, ...payload }, "*");
+    const message = { source: SOURCE, ...payload };
+    if (state.iframe && state.iframe.contentWindow) {
+      state.iframe.contentWindow.postMessage(message, "*");
+    }
+    publishBridgeMessage(TO_DASHBOARD_KEY, message);
+  }
+
+  function startDashboardBridge() {
+    // Cross-origin pages cannot share DOM access, so the userscript relays through its own storage.
+    subscribeToBridge(TO_DASHBOARD_KEY, (payload) => {
+      if (payload?.source !== SOURCE) return;
+      window.postMessage(payload, "*");
+    });
+    window.addEventListener("message", (event) => {
+      const data = event.data || {};
+      if (data.source !== DASHBOARD_SOURCE) return;
+      publishBridgeMessage(TO_JACKBOX_KEY, data);
+    });
+    if (hasUserscriptStorageBridge()) {
+      Promise.resolve(getBridgeValue(HEARTBEAT_KEY, "")).then((raw) => {
+        const heartbeat = parseBridgeEnvelope(raw);
+        if (heartbeat?.type === "JBA_READY") window.postMessage(heartbeat, "*");
+      });
+    }
   }
 
   function styles() {
@@ -262,15 +354,24 @@
     randomVoteIfNeeded();
   }
 
-  window.addEventListener("message", (event) => {
-    const data = event.data || {};
+  function handleDashboardMessage(data) {
     if (data.source !== DASHBOARD_SOURCE) return;
     if (data.type === "JBA_CONFIG") { state.config = { ...state.config, ...(data.config || {}) }; saveConfig(); log("Config updated", `${state.config.persona || "persona"}, ${state.config.style || "style"}`); return; }
     if (data.type === "JBA_ANSWER") { if (data.config) state.config = { ...state.config, ...data.config }; saveConfig(); if (state.config.autosubmit !== false) submitAnswer(data.answer, data.promptId); else log("Answer ready", data.answer || ""); return; }
     if (data.type === "JBA_EVERYONES_IN") clickEveryonesIn();
     if (data.type === "JBA_JOIN") joinRoom(data.roomCode, data.username);
-  });
+  }
 
-  injectPanel();
-  window.setInterval(scan, 900);
+  function startJackboxAutomation() {
+    subscribeToBridge(TO_JACKBOX_KEY, handleDashboardMessage);
+    window.addEventListener("message", (event) => {
+      handleDashboardMessage(event.data || {});
+    });
+    window.setInterval(() => publishBridgeMessage(HEARTBEAT_KEY, { source: SOURCE, type: "JBA_READY", href: location.href }), 3000);
+    injectPanel();
+    window.setInterval(scan, 900);
+  }
+
+  if (isDashboardPage) startDashboardBridge();
+  if (isJackboxPage) startJackboxAutomation();
 })();

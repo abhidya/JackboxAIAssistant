@@ -13,7 +13,7 @@
       <div>
         <p class="eyebrow">GitHub Pages-first</p>
         <h1>Jackbox AI Assistant</h1>
-        <p class="lede">Run the assistant as a static website. Install the connector userscript to let a Jackbox browser tab read prompts, ask this page for a local answer, and submit it for you.</p>
+        <p class="lede">Run the assistant from this deployed dashboard. Install the connector userscript to bridge this page with a Jackbox browser tab that reads prompts, asks WebLLM for a local answer, and submits it for you.</p>
       </div>
       <div class="hero-actions">
         <a class="button primary" href="jackbox-ai-connector.user.js">Install connector</a>
@@ -30,12 +30,13 @@
         <ol class="steps">
           <li><strong>Install Tampermonkey or Greasemonkey.</strong> The connector is a userscript, so it needs a userscript manager.</li>
           <li><strong>Install this connector:</strong> <a href="jackbox-ai-connector.user.js">jackbox-ai-connector.user.js</a>.</li>
-          <li><strong>Open <code>jackbox.tv</code>.</strong> The connector injects a compact AI panel into the page.</li>
-          <li><strong>Select a persona and enable automation.</strong> One Jackbox tab represents one autonomous AI player.</li>
-          <li><strong>Use more tabs for more bots.</strong> Each tab keeps its own persona, room, username, and logs.</li>
+          <li><strong>Keep this dashboard open.</strong> The connector also runs here and relays commands to Jackbox.</li>
+          <li><strong>Open <code>jackbox.tv</code>.</strong> The Jackbox tab is still required because only that page can expose its prompt and input DOM to the userscript.</li>
+          <li><strong>Select a persona and enable automation here.</strong> One Jackbox tab represents one autonomous AI player.</li>
+          <li><strong>Use more tabs for more bots.</strong> Each Jackbox tab keeps its own room, username, and logs.</li>
         </ol>
         <div class="notice">
-          <strong>Important:</strong> this static edition automates the actual Jackbox web page from a userscript. It does not reverse-engineer private Jackbox APIs and does not require a Python/Flask/Selenium server.
+          <strong>Important:</strong> this static edition controls the assistant from the deployed page, then automates the actual Jackbox web page through a userscript running in the Jackbox tab. It does not reverse-engineer private Jackbox APIs and does not require a Python/Flask/Selenium server.
         </div>
       </section>
 
@@ -63,19 +64,13 @@
               <option value="clean">Clean</option>
             </select>
           </label>
-          <label>Generator
-            <select id="engine-select">
-              <option value="builtin">Built-in static generator</option>
-              <option value="webllm">WebLLM in-browser model</option>
-            </select>
-          </label>
           <label>WebLLM model id
             <input id="model-id" type="text" value="Llama-3.2-1B-Instruct-q4f16_1-MLC">
           </label>
           <label class="check-row"><input id="autosubmit-toggle" type="checkbox" checked> Auto-submit answers</label>
           <label class="check-row"><input id="autovote-toggle" type="checkbox"> Auto-vote randomly</label>
         </div>
-        <div id="model-status" class="status disconnected">WebLLM not loaded. Built-in generator is ready.</div>
+        <div id="model-status" class="status disconnected">WebLLM not loaded. Click Load WebLLM or generate a prompt to load it.</div>
         <div class="button-row">
           <button id="join-room">Fill/join room</button>
           <button id="load-model">Load WebLLM</button>

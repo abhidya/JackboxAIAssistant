@@ -31,7 +31,7 @@
   const state = {
     persona: localStorage.getItem("jba:persona") || PERSONAS[14].name,
     style: localStorage.getItem("jba:style") || "balanced",
-    engine: localStorage.getItem("jba:engine") || "builtin",
+    engine: "webllm",
     modelId: localStorage.getItem("jba:modelId") || "Llama-3.2-1B-Instruct-q4f16_1-MLC",
     roomCode: localStorage.getItem("jba:roomCode") || "",
     playerName: localStorage.getItem("jba:playerName") || "",
@@ -40,6 +40,7 @@
     connected: false,
     lastPrompt: "",
     webllmEngine: null,
+    webllmLoadPromise: null,
     loadingModel: false
   };
 
@@ -96,7 +97,6 @@
   function syncControls() {
     if ($("persona-select")) $("persona-select").value = state.persona;
     if ($("style-select")) $("style-select").value = state.style;
-    if ($("engine-select")) $("engine-select").value = state.engine;
     if ($("model-id")) $("model-id").value = state.modelId;
     if ($("room-code")) $("room-code").value = state.roomCode;
     if ($("player-name")) $("player-name").value = state.playerName || `${shortName(state.persona).replace(/[^a-z0-9]/gi, "")}Bot`.slice(0, 16);
@@ -106,8 +106,8 @@
     if (status) {
       status.className = `status ${state.connected ? "connected" : "disconnected"}`;
       status.textContent = state.connected
-        ? "Connected inside the jackbox.tv userscript panel."
-        : "Installer/dashboard mode. To automate Jackbox, open jackbox.tv after installing the userscript and use the injected panel there.";
+        ? "Connected to the jackbox.tv userscript bridge."
+        : "Dashboard mode. Keep this tab open, then open jackbox.tv in another tab for automation.";
     }
   }
 
@@ -119,41 +119,9 @@
     return String(value).replace(/[\\'\n\r]/g, "");
   }
 
-  function wordsFromPrompt(prompt) {
-    return String(prompt).toLowerCase().replace(/[^a-z0-9\s']/g, " ").split(/\s+/).filter((word) => word.length > 3).slice(0, 4);
-  }
-
-  function buildPrompt(persona, prompt) {
-    return `You are ${shortName(persona.name)} playing Quiplash. Traits: ${persona.traits}. Style: ${persona.style}. Prompt: ${prompt}. Answer in under 7 words.`;
-  }
-
-  function heuristicAnswer(prompt, personaName = state.persona, style = state.style) {
-    const persona = personaByName(personaName);
-    const keys = wordsFromPrompt(prompt);
-    const noun = keys[0] || "chaos";
-    const templates = {
-      balanced: [`${persona.catchphrase}: ${noun} got cancelled`, `${shortName(persona.name)} blames ${noun}`, `${noun}? absolutely not today`, `legally, that's ${persona.catchphrase}`, `${noun} with extra consequences`],
-      edgy: [`${noun} walked into HR`, `${persona.catchphrase}, but taxable`, `${noun} owes me bail`, `crime, but make it ${noun}`, `${noun} ate the evidence`],
-      absurd: [`haunted ${noun} speedrun`, `${persona.catchphrase} in a trenchcoat`, `three raccoons named ${noun}`, `${noun} flavored moon lawsuit`, `grandma's illegal ${noun} cannon`],
-      clean: [`surprise ${noun} meeting`, `${persona.catchphrase} before breakfast`, `${noun} needs adult supervision`, `professionally confused by ${noun}`, `${noun} forgot its pants`]
-    };
-    const list = templates[style] || templates.balanced;
-    return normalizeAnswer(list[Math.floor(Math.random() * list.length)]);
-  }
-
   function normalizeAnswer(answer) {
     const words = String(answer).replace(/["“”]/g, "").replace(/\s+/g, " ").trim().split(" ");
     return words.slice(0, 7).join(" ");
-  }
-
-  async function generateCandidates(prompt, count = 3) {
-    const candidates = new Set();
-    let guard = 0;
-    while (candidates.size < count && guard < 20) {
-      guard += 1;
-      candidates.add(heuristicAnswer(prompt));
-    }
-    return [...candidates];
   }
 
   function setModelStatus(message, ok = false) {
@@ -165,53 +133,86 @@
 
   async function ensureWebLLM() {
     if (state.webllmEngine) return state.webllmEngine;
-    if (state.loadingModel) throw new Error("Model is still loading.");
-    if (!("gpu" in navigator)) throw new Error("WebGPU is not available in this browser. Use Chrome/Edge with WebGPU or switch to the built-in generator.");
+    if (state.webllmLoadPromise) return state.webllmLoadPromise;
+    if (!state.modelId.trim()) throw new Error("Choose a WebLLM model id before loading.");
+    if (!("gpu" in navigator)) throw new Error("WebGPU is not available in this browser. Use Chrome or Edge with WebGPU enabled.");
 
     state.loadingModel = true;
+    syncGenerationButtons();
     setModelStatus("Loading WebLLM runtime… first load can take a while.");
-    try {
+    state.webllmLoadPromise = (async () => {
       const webllm = await import("https://esm.run/@mlc-ai/web-llm");
-      state.webllmEngine = await webllm.CreateMLCEngine(state.modelId, {
+      const engine = await webllm.CreateMLCEngine(state.modelId.trim(), {
         initProgressCallback: (progress) => {
           const text = progress?.text || progress?.message || "Downloading and initializing model…";
           setModelStatus(text);
         }
       });
+      state.webllmEngine = engine;
       setModelStatus(`WebLLM ready: ${state.modelId}`, true);
-      return state.webllmEngine;
+      return engine;
+    })();
+    try {
+      return await state.webllmLoadPromise;
     } finally {
       state.loadingModel = false;
+      state.webllmLoadPromise = null;
+      syncGenerationButtons();
     }
   }
 
-  async function answerPrompt(prompt) {
-    if (state.engine === "webllm") {
-      try {
-        const persona = personaByName(state.persona);
-        const engine = await ensureWebLLM();
-        const reply = await engine.chat.completions.create({
-          messages: [
-            { role: "system", content: `You are ${shortName(persona.name)} playing Quiplash. Traits: ${persona.traits}. Style: ${persona.style}. Stay in character. Answer in under 7 words. Do not explain.` },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.9,
-          max_tokens: 24
-        });
-        const answer = reply?.choices?.[0]?.message?.content || "";
-        return normalizeAnswer(answer) || heuristicAnswer(prompt);
-      } catch (error) {
-        setModelStatus(`WebLLM unavailable: ${error.message}. Falling back to built-in generator.`);
-        log("WebLLM fallback", error.message);
-      }
-    }
-    const [answer] = await generateCandidates(prompt, 1);
+  function quoteMessages(prompt, variant = 1) {
+    const persona = personaByName(state.persona);
+    const styleGuide = {
+      balanced: "funny, direct, and playable",
+      edgy: "sharp but not hateful or explicit",
+      absurd: "surreal and unexpected",
+      clean: "family-friendly and silly"
+    }[state.style] || "funny, direct, and playable";
+    return [
+      { role: "system", content: `You are ${shortName(persona.name)} playing Quiplash. Traits: ${persona.traits}. Voice: ${persona.style}. Write one ${styleGuide} answer. Under 7 words. No quotes. No explanation.` },
+      { role: "user", content: `Prompt: ${prompt}\nCandidate variant: ${variant}` }
+    ];
+  }
+
+  async function generateWebLLMAnswer(prompt, variant = 1) {
+    const engine = await ensureWebLLM();
+    const reply = await engine.chat.completions.create({
+      messages: quoteMessages(prompt, variant),
+      temperature: 0.95,
+      top_p: 0.9,
+      max_tokens: 24
+    });
+    const answer = normalizeAnswer(reply?.choices?.[0]?.message?.content || "");
+    if (!answer) throw new Error("WebLLM returned an empty answer.");
     return answer;
   }
 
+  async function answerPrompt(prompt) {
+    return generateWebLLMAnswer(prompt, 1);
+  }
+
+  async function generateCandidates(prompt, count = 3) {
+    const candidates = new Set();
+    let variant = 1;
+    while (candidates.size < count && variant <= count + 3) {
+      candidates.add(await generateWebLLMAnswer(prompt, variant));
+      variant += 1;
+    }
+    return [...candidates];
+  }
+
+  function syncGenerationButtons() {
+    if ($("load-model")) $("load-model").disabled = state.loadingModel;
+    if ($("generate-button")) $("generate-button").disabled = state.loadingModel;
+  }
+
   function sendToConnector(payload) {
+    const message = { source: "jackbox-ai-dashboard", ...payload };
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ source: "jackbox-ai-dashboard", ...payload }, "*");
+      window.parent.postMessage(message, "*");
+    } else {
+      window.postMessage(message, "*");
     }
   }
 
@@ -219,7 +220,7 @@
     return {
       persona: state.persona,
       style: state.style,
-      engine: state.engine,
+      engine: "webllm",
       modelId: state.modelId,
       roomCode: state.roomCode,
       playerName: state.playerName,
@@ -251,9 +252,14 @@
       if (!prompt || prompt === state.lastPrompt) return;
       state.lastPrompt = prompt;
       log("Prompt detected", prompt);
-      const answer = await answerPrompt(prompt);
-      log("Generated answer", answer);
-      sendToConnector({ type: "JBA_ANSWER", promptId: data.promptId, answer, config: currentConfig() });
+      try {
+        const answer = await answerPrompt(prompt);
+        log("Generated WebLLM answer", answer);
+        sendToConnector({ type: "JBA_ANSWER", promptId: data.promptId, answer, config: currentConfig() });
+      } catch (error) {
+        setModelStatus(`WebLLM generation failed: ${error.message}`);
+        log("WebLLM generation failed", error.message);
+      }
       return;
     }
 
@@ -266,8 +272,7 @@
 
     $("persona-select")?.addEventListener("change", (event) => { state.persona = event.target.value; saveState(); renderPersonas(); sendConfig(); });
     $("style-select")?.addEventListener("change", (event) => { state.style = event.target.value; saveState(); sendConfig(); });
-    $("engine-select")?.addEventListener("change", (event) => { state.engine = event.target.value; saveState(); sendConfig(); });
-    $("model-id")?.addEventListener("input", (event) => { state.modelId = event.target.value.trim(); state.webllmEngine = null; saveState(); });
+    $("model-id")?.addEventListener("input", (event) => { state.modelId = event.target.value.trim(); state.webllmEngine = null; state.webllmLoadPromise = null; saveState(); });
     $("room-code")?.addEventListener("input", (event) => { state.roomCode = event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4); saveState(); syncControls(); });
     $("player-name")?.addEventListener("input", (event) => { state.playerName = event.target.value.trim(); saveState(); });
     $("autosubmit-toggle")?.addEventListener("change", (event) => { state.autosubmit = event.target.checked; saveState(); sendConfig(); });
@@ -293,8 +298,14 @@
       const prompt = $("prompt-input")?.value || "";
       const list = $("candidate-list");
       if (!prompt.trim() || !list) return;
-      const candidates = await generateCandidates(prompt, 3);
-      list.innerHTML = candidates.map((candidate) => `<li>${escapeHtml(candidate)}</li>`).join("");
+      list.innerHTML = "<li>Generating with WebLLM…</li>";
+      try {
+        const candidates = await generateCandidates(prompt, 3);
+        list.innerHTML = candidates.map((candidate) => `<li>${escapeHtml(candidate)}</li>`).join("");
+      } catch (error) {
+        setModelStatus(`WebLLM generation failed: ${error.message}`);
+        list.innerHTML = `<li>${escapeHtml(error.message)}</li>`;
+      }
     });
 
     window.addEventListener("message", handleConnectorMessage);
@@ -303,6 +314,7 @@
   renderPersonas();
   wireControls();
   syncControls();
+  syncGenerationButtons();
   if (window.parent && window.parent !== window) {
     sendToConnector({ type: "JBA_DASHBOARD_READY", config: currentConfig() });
   }
