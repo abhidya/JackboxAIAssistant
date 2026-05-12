@@ -1,4 +1,0 @@
-Flask>=3.0,<4
-ollama>=0.4,<1
-selenium>=4.20,<5
-openai>=1.0,<2

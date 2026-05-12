@@ -26,6 +26,8 @@ for (const needle of ['app.js', 'styles.css', 'jackbox-ai-connector.user.js', 'I
 
 for (const needle of [
   '@match        https://jackbox.tv/*',
+  '@match        http://localhost:4173/*',
+  '@match        http://127.0.0.1:4173/*',
   '@match        https://abhidya.github.io/JackboxAIAssistant',
   '@match        https://abhidya.github.io/JackboxAIAssistant/',
   '@match        https://abhidya.github.io/JackboxAIAssistant/*',
@@ -35,6 +37,8 @@ for (const needle of [
   'TO_DASHBOARD_KEY',
   'TO_JACKBOX_KEY',
   'HEARTBEAT_KEY',
+  'CONNECTOR_ID',
+  'targetConnectorId',
   'JBA_BRIDGE_READY',
   'reconnect|connect',
   'startDashboardBridge()',
@@ -44,11 +48,17 @@ for (const needle of [
 }
 
 for (const needle of [
-  'window.postMessage(message, "*")',
+  'window.postMessage(message, location.origin)',
   'handleConnectorMessage',
   'bridgeReady',
   'JBA_BRIDGE_READY',
   'JBA_DASHBOARD_PING',
+  'connector-select',
+  'companion-start',
+  'companionRequest',
+  'activeConnectorId',
+  'lastPromptId',
+  'targetConnectorId',
   'generateWebLLMAnswer',
   'engine.chat.completions.create',
   'JBA_PROMPT',
@@ -76,9 +86,10 @@ for (const needle of [
 
 for (const needle of [
   'userscript storage events',
-  'npm run check',
+  'npm test',
   'bridge contract',
-  'WebLLM for dashboard generation'
+  'WebLLM for dashboard generation',
+  'npm run companion'
 ]) {
   assertIncludes(readme, needle, 'README.md');
 }

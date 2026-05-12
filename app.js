@@ -27,6 +27,13 @@
     { name: "Rick Sanchez (Rick and Morty)", traits: "nihilistic universe genius", style: "burping cynical science", catchphrase: "*Burp*", avatar: "Assets/avatars/rick-sanchez.jpg" },
     { name: "Austin Powers (Austin Powers franchise)", traits: "retro absurd spy", style: "swinging British innuendo", catchphrase: "Yeah baby", avatar: "Assets/avatars/austin-powers.jpg" }
   ];
+  const AVAILABLE_AVATARS = new Map([
+    ["Deadpool (Marvel Comics)", "Assets/avatars/deadpool.jpg"],
+    ["Rick Sanchez (Rick and Morty)", "Assets/avatars/ricksanchez.jpg"],
+    ["Shrek (Shrek)", "Assets/avatars/shrek.jpg"],
+    ["SpongeBob SquarePants (SpongeBob)", "Assets/avatars/spongebob.jpg"],
+    ["Tony Stark (Marvel)", "Assets/avatars/tonystark.jpg"]
+  ]);
 
   const state = {
     persona: localStorage.getItem("jba:persona") || PERSONAS[14].name,
@@ -39,7 +46,10 @@
     autovote: localStorage.getItem("jba:autovote") === "true",
     connected: false,
     bridgeReady: false,
-    lastPrompt: "",
+    activeConnectorId: localStorage.getItem("jba:activeConnectorId") || "",
+    connectors: new Map(),
+    lastPromptId: "",
+    companionUrl: localStorage.getItem("jba:companionUrl") || "http://127.0.0.1:5174",
     webllmEngine: null,
     webllmLoadPromise: null,
     loadingModel: false
@@ -48,6 +58,7 @@
   const $ = (id) => document.getElementById(id);
   const personaByName = (name) => PERSONAS.find((persona) => persona.name === name) || PERSONAS[0];
   const shortName = (name) => name.split("(")[0].trim();
+  const personaAvatar = (persona) => AVAILABLE_AVATARS.get(persona.name) || "";
 
   function log(message, detail) {
     const box = $("log");
@@ -83,7 +94,9 @@
       const card = document.createElement("button");
       card.type = "button";
       card.className = `persona-card ${persona.name === state.persona ? "active" : ""}`;
-      card.innerHTML = `<img class="persona-avatar" src="${persona.avatar}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'persona-avatar',textContent:'${escapeAttr(shortName(persona.name)[0] || "?")}' }))"><div class="persona-name">${escapeHtml(shortName(persona.name))}</div><div class="persona-style">${escapeHtml(persona.style)}</div>`;
+      const avatar = personaAvatar(persona);
+      const fallback = `<span class="persona-avatar">${escapeHtml(shortName(persona.name)[0] || "?")}</span>`;
+      card.innerHTML = `${avatar ? `<img class="persona-avatar" src="${avatar}" alt="">` : fallback}<div class="persona-name">${escapeHtml(shortName(persona.name))}</div><div class="persona-style">${escapeHtml(persona.style)}</div>`;
       card.addEventListener("click", () => {
         state.persona = persona.name;
         saveState();
@@ -101,13 +114,14 @@
     if ($("model-id")) $("model-id").value = state.modelId;
     if ($("room-code")) $("room-code").value = state.roomCode;
     if ($("player-name")) $("player-name").value = state.playerName || `${shortName(state.persona).replace(/[^a-z0-9]/gi, "")}Bot`.slice(0, 16);
+    syncConnectorSelect();
     if ($("autosubmit-toggle")) $("autosubmit-toggle").checked = state.autosubmit;
     if ($("autovote-toggle")) $("autovote-toggle").checked = state.autovote;
     const status = $("bridge-status");
     if (status) {
       status.className = `status ${state.connected ? "connected" : "disconnected"}`;
       status.textContent = state.connected
-        ? "Connected to the jackbox.tv userscript bridge."
+        ? `Connected to ${state.connectors.size} jackbox.tv tab${state.connectors.size === 1 ? "" : "s"}.`
         : state.bridgeReady
           ? "Dashboard userscript relay is active. Open jackbox.tv in another tab to connect automation."
           : "Dashboard mode. If this stays here, reinstall/update the userscript, then reload this page.";
@@ -129,6 +143,13 @@
 
   function setModelStatus(message, ok = false) {
     const status = $("model-status");
+    if (!status) return;
+    status.className = `status ${ok ? "connected" : "disconnected"}`;
+    status.textContent = message;
+  }
+
+  function setCompanionStatus(message, ok = false) {
+    const status = $("companion-status");
     if (!status) return;
     status.className = `status ${ok ? "connected" : "disconnected"}`;
     status.textContent = message;
@@ -210,12 +231,51 @@
     if ($("generate-button")) $("generate-button").disabled = state.loadingModel;
   }
 
-  function sendToConnector(payload) {
+  function syncConnectorSelect() {
+    const select = $("connector-select");
+    if (!select) return;
+    const connectors = [...state.connectors.values()].sort((a, b) => b.seenAt - a.seenAt);
+    select.innerHTML = connectors.length
+      ? connectors.map((connector) => `<option value="${escapeHtml(connector.connectorId)}">${escapeHtml(connector.label)}</option>`).join("")
+      : '<option value="">No connected Jackbox tabs</option>';
+    if (state.activeConnectorId && connectors.some((connector) => connector.connectorId === state.activeConnectorId)) {
+      select.value = state.activeConnectorId;
+    } else if (connectors[0]) {
+      state.activeConnectorId = connectors[0].connectorId;
+      localStorage.setItem("jba:activeConnectorId", state.activeConnectorId);
+      select.value = state.activeConnectorId;
+    }
+  }
+
+  function rememberConnector(data) {
+    if (!data.connectorId) return;
+    const existing = state.connectors.get(data.connectorId) || {};
+    let urlLabel = "jackbox.tv";
+    try {
+      if (data.href) urlLabel = new URL(data.href).hostname;
+    } catch {}
+    const label = data.playerName ? `${data.playerName} (${urlLabel})` : `${urlLabel} ${data.connectorId.slice(-6)}`;
+    state.connectors.set(data.connectorId, { ...existing, connectorId: data.connectorId, href: data.href || existing.href || "", label, seenAt: Date.now() });
+    if (!state.activeConnectorId) {
+      state.activeConnectorId = data.connectorId;
+      localStorage.setItem("jba:activeConnectorId", state.activeConnectorId);
+    }
+    state.connected = true;
+    syncConnectorSelect();
+  }
+
+  function isTrustedConnectorEvent(event) {
+    return event.origin === location.origin || event.origin === "https://jackbox.tv";
+  }
+
+  function sendToConnector(payload, options = {}) {
+    const targetConnectorId = options.targetConnectorId === undefined ? state.activeConnectorId : options.targetConnectorId;
     const message = { source: "jackbox-ai-dashboard", ...payload };
+    if (targetConnectorId) message.targetConnectorId = targetConnectorId;
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage(message, "*");
+      window.parent.postMessage(message, "https://jackbox.tv");
     } else {
-      window.postMessage(message, "*");
+      window.postMessage(message, location.origin);
     }
   }
 
@@ -238,13 +298,52 @@
     log("Sent config", `${shortName(state.persona)}, ${state.style}`);
   }
 
+  async function companionRequest(path, options = {}) {
+    const response = await fetch(`${state.companionUrl}${path}`, {
+      method: options.method || "GET",
+      headers: { "content-type": "application/json" },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Companion request failed (${response.status})`);
+    return data;
+  }
+
+  async function refreshCompanionStatus() {
+    try {
+      const data = await companionRequest("/api/bots");
+      setCompanionStatus(`Local companion connected. ${data.running || 0} bot${data.running === 1 ? "" : "s"} running.`, true);
+    } catch {
+      setCompanionStatus("Local companion not connected. Run `npm run companion` locally.");
+    }
+  }
+
+  async function startCompanionBots() {
+    const count = Number($("companion-count")?.value || 5);
+    const baseName = $("companion-prefix")?.value || "Bot";
+    const headless = $("companion-headless")?.checked !== false;
+    const body = {
+      roomCode: state.roomCode,
+      count,
+      baseName,
+      style: state.style,
+      autovote: state.autovote,
+      headless
+    };
+    const data = await companionRequest("/api/bots/start", { method: "POST", body });
+    setCompanionStatus(`Started ${data.running || 0} local bot${data.running === 1 ? "" : "s"}.`, true);
+    log("Started local companion bots", `${data.running || 0} in room ${state.roomCode}`);
+  }
+
   function pingConnector() {
-    sendToConnector({ type: "JBA_DASHBOARD_PING", config: currentConfig(), at: Date.now() });
+    sendToConnector({ type: "JBA_DASHBOARD_PING", at: Date.now() }, { targetConnectorId: "" });
   }
 
   async function handleConnectorMessage(event) {
     const data = event.data || {};
     if (data.source !== "jackbox-ai-connector") return;
+    if (!isTrustedConnectorEvent(event)) return;
+    rememberConnector(data);
 
     if (data.type === "JBA_BRIDGE_READY") {
       state.bridgeReady = true;
@@ -265,13 +364,13 @@
 
     if (data.type === "JBA_PROMPT") {
       const prompt = data.prompt || "";
-      if (!prompt || prompt === state.lastPrompt) return;
-      state.lastPrompt = prompt;
+      if (!prompt || data.promptId === state.lastPromptId) return;
+      state.lastPromptId = data.promptId || "";
       log("Prompt detected", prompt);
       try {
         const answer = await answerPrompt(prompt);
         log("Generated WebLLM answer", answer);
-        sendToConnector({ type: "JBA_ANSWER", promptId: data.promptId, answer, config: currentConfig() });
+        sendToConnector({ type: "JBA_ANSWER", promptId: data.promptId, answer, config: currentConfig() }, { targetConnectorId: data.connectorId || state.activeConnectorId });
       } catch (error) {
         setModelStatus(`WebLLM generation failed: ${error.message}`);
         log("WebLLM generation failed", error.message);
@@ -291,6 +390,11 @@
     $("model-id")?.addEventListener("input", (event) => { state.modelId = event.target.value.trim(); state.webllmEngine = null; state.webllmLoadPromise = null; saveState(); });
     $("room-code")?.addEventListener("input", (event) => { state.roomCode = event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4); saveState(); syncControls(); });
     $("player-name")?.addEventListener("input", (event) => { state.playerName = event.target.value.trim(); saveState(); });
+    $("connector-select")?.addEventListener("change", (event) => {
+      state.activeConnectorId = event.target.value;
+      localStorage.setItem("jba:activeConnectorId", state.activeConnectorId);
+      sendConfig();
+    });
     $("autosubmit-toggle")?.addEventListener("change", (event) => { state.autosubmit = event.target.checked; saveState(); sendConfig(); });
     $("autovote-toggle")?.addEventListener("change", (event) => { state.autovote = event.target.checked; saveState(); sendConfig(); });
     $("send-config")?.addEventListener("click", sendConfig);
@@ -310,6 +414,31 @@
       }
     });
     $("everyone-in")?.addEventListener("click", () => sendToConnector({ type: "JBA_EVERYONES_IN" }));
+    $("companion-start")?.addEventListener("click", async () => {
+      try {
+        await startCompanionBots();
+      } catch (error) {
+        setCompanionStatus(error.message);
+        log("Companion start failed", error.message);
+      }
+    });
+    $("companion-stop")?.addEventListener("click", async () => {
+      try {
+        const data = await companionRequest("/api/bots/stop", { method: "POST", body: {} });
+        setCompanionStatus(`Stopped local bots. ${data.running || 0} running.`, true);
+        log("Stopped local companion bots");
+      } catch (error) {
+        setCompanionStatus(error.message);
+      }
+    });
+    $("companion-everyone")?.addEventListener("click", async () => {
+      try {
+        const data = await companionRequest("/api/bots/everyones-in", { method: "POST", body: {} });
+        setCompanionStatus(data.clicked ? `Clicked Everyone's In from ${data.bot}.` : "No companion bot has Everyone's In visible.", data.clicked);
+      } catch (error) {
+        setCompanionStatus(error.message);
+      }
+    });
     $("generate-button")?.addEventListener("click", async () => {
       const prompt = $("prompt-input")?.value || "";
       const list = $("candidate-list");
@@ -326,6 +455,7 @@
 
     window.addEventListener("message", handleConnectorMessage);
     window.setInterval(pingConnector, 3000);
+    window.setInterval(refreshCompanionStatus, 5000);
   }
 
   renderPersonas();
@@ -333,6 +463,7 @@
   syncControls();
   syncGenerationButtons();
   pingConnector();
+  refreshCompanionStatus();
   if (window.parent && window.parent !== window) {
     sendToConnector({ type: "JBA_DASHBOARD_READY", config: currentConfig() });
   }

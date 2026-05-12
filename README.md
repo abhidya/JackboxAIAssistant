@@ -23,7 +23,7 @@ This repository is now **GitHub Pages-first**. The main app is a static website 
 | Ollama / cloud provider calls | Browser-local generator contract; optional WebLLM runtime |
 | Local dependency telemetry | Connector event log in the dashboard |
 
-The old Python files are kept in the repo as reference/migration history, but the deployable product is the static app.
+The old Python files are archived under `legacy/python/` as text snapshots for migration history. They are not part of the runnable product.
 
 ## User setup workflow
 
@@ -34,13 +34,26 @@ The old Python files are kept in the repo as reference/migration history, but th
 3. Click **Install connector** on the site. This opens `jackbox-ai-connector.user.js` in the userscript manager.
 4. Keep the deployed GitHub Pages dashboard open.
 5. Open `https://jackbox.tv` in another tab. This tab is still required because browser security only allows the userscript to click and type inside a page where it is running.
-6. Enter room code, player name, persona, style, and automation settings in the deployed dashboard.
-7. Click **Fill/join room** from the deployed dashboard, or join manually in the Jackbox tab.
-8. When a prompt appears, the Jackbox-side connector relays it to the deployed dashboard, receives an answer, and submits it if auto-submit is enabled.
+6. Choose the connected Jackbox tab in the dashboard's **Jackbox tab** selector.
+7. Enter room code, player name, persona, style, and automation settings in the deployed dashboard.
+8. Click **Fill/join room** from the deployed dashboard, or join manually in the Jackbox tab.
+9. When a prompt appears, the Jackbox-side connector relays it to the deployed dashboard, receives an answer, and submits it if auto-submit is enabled.
 
-One browser tab represents one AI player. Open more Jackbox tabs/windows for more bots.
+One browser tab represents one AI player. Open more Jackbox tabs/windows for more bots, then select the target tab before sending join/config/start commands.
 
 The deployed page can now run the control UI directly, but it still cannot directly access Jackbox DOM from its own origin. The userscript bridges the deployed dashboard tab and the Jackbox tab through userscript storage events.
+
+## No-tab local companion
+
+For five bots without opening five Jackbox tabs yourself, run the optional local companion. It launches isolated Chromium contexts from your machine and can run headless, so the dashboard is the only visible browser tab.
+
+```bash
+npm install
+npx playwright install chromium
+npm run companion
+```
+
+Then open the dashboard, enter the room code, set **Bot count** to `5`, keep **Run without visible browser windows** checked, and click **Start local bots**. The companion uses the local deterministic answer generator, not WebLLM, because the bots run outside the dashboard tab.
 
 ## Deploy to GitHub Pages
 
@@ -51,7 +64,7 @@ This repo includes `.github/workflows/pages.yml`.
 3. The workflow runs:
 
 ```bash
-npm run check
+npm test
 npm run build
 ```
 
@@ -60,7 +73,7 @@ and publishes `dist/`.
 For a manual local bundle:
 
 ```bash
-npm run check
+npm test
 npm run build
 ```
 
@@ -71,9 +84,11 @@ npm run serve
 # open http://127.0.0.1:4173/
 ```
 
+The userscript includes local dashboard matches for `http://localhost:4173/*` and `http://127.0.0.1:4173/*`.
+
 ## Checks
 
-Run `npm run check` before deploying. The check compiles the dashboard JavaScript and userscript, then verifies the static bridge contract: dashboard and Jackbox userscript matches, userscript storage grants, relay keys, top-level dashboard messaging, and workflow documentation.
+Run `npm test` before deploying. The check compiles the dashboard JavaScript and userscript, verifies the static bridge contract, and runs business-logic coverage for prompt relay, targeted answer submission, and targeted room joining.
 
 ## Static app files
 
@@ -86,6 +101,10 @@ Run `npm run check` before deploying. The check compiles the dashboard JavaScrip
 | `Assets/avatars/` | Optional persona avatar images |
 | `scripts/build-static.js` | Copies deployable static files into `dist/` |
 | `scripts/check-static.js` | Syntax/wiring smoke check |
+| `scripts/test-automation.js` | Userscript bridge and automation business-logic test |
+| `scripts/companion-server.js` | Optional local no-tab/headless bot runner |
+| `scripts/test-companion.js` | Companion bot config and answer business-logic test |
+| `legacy/python/` | Archived pre-static Python implementation snapshots, stored as text only |
 
 ## Connector bridge protocol
 
@@ -97,12 +116,16 @@ Connector → dashboard:
 - `JBA_PROMPT` — visible prompt detected; includes `prompt` and `promptId`.
 - `JBA_LOG` — status/debug message.
 
+Connector messages include `connectorId`; the dashboard uses it to target one Jackbox tab instead of broadcasting commands to every tab.
+
 Dashboard → connector:
 
 - `JBA_CONFIG` — persona/style/autosubmit/autovote settings.
 - `JBA_ANSWER` — generated answer for a prompt.
 - `JBA_JOIN` — fill room code/player name and click Join.
 - `JBA_EVERYONES_IN` — click the visible host start control.
+
+Dashboard commands include `targetConnectorId` when they are meant for one selected tab.
 
 ## Client-side LLM
 
@@ -116,6 +139,7 @@ The bridge contract remains `JBA_PROMPT` → `JBA_ANSWER`, so a future Transform
 
 - This automates the visible `jackbox.tv` page; it does not call private Jackbox APIs.
 - Jackbox DOM changes can require selector updates in `jackbox-ai-connector.user.js`.
-- One tab is one bot. True multi-bot isolation is easier with a local Playwright companion, not a pure userscript.
+- One tab is one bot. The static dashboard can target individual connected tabs, but each tab still needs its own browser page/session.
 - Browser/userscript permissions and extension policies vary by browser.
 - WebLLM requires WebGPU and model downloads; unsupported browsers show a model error in the dashboard.
+- No-tab mode requires a local Node process and Playwright-managed Chromium.

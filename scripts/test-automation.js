@@ -165,10 +165,22 @@ function runConnector() {
   assert.equal(promptMessage.source, "jackbox-ai-connector");
   assert.equal(promptMessage.type, "JBA_PROMPT");
   assert.equal(promptMessage.prompt, "A bad thing to say at a wedding");
+  assert.ok(promptMessage.connectorId, "prompt should include connector id");
 
   publishToJackbox(context, {
     source: "jackbox-ai-dashboard",
     type: "JBA_ANSWER",
+    targetConnectorId: "some-other-tab",
+    promptId: promptMessage.promptId,
+    answer: "wrong tab answer"
+  });
+
+  assert.equal(context.elements.answer.value, "");
+
+  publishToJackbox(context, {
+    source: "jackbox-ai-dashboard",
+    type: "JBA_ANSWER",
+    targetConnectorId: promptMessage.connectorId,
     promptId: promptMessage.promptId,
     answer: "seven tiny lawyers"
   });
@@ -179,9 +191,25 @@ function runConnector() {
 
 {
   const context = runConnector();
+  const ready = context.bridgeMessages.map((message) => bridgePayload(message.value)).find((payload) => payload.type === "JBA_READY");
+  assert.ok(ready?.connectorId, "ready should include connector id");
+
   publishToJackbox(context, {
     source: "jackbox-ai-dashboard",
     type: "JBA_JOIN",
+    targetConnectorId: "some-other-tab",
+    roomCode: "wxyz",
+    username: "WrongBot"
+  });
+
+  assert.equal(context.elements.room.value, "");
+  assert.equal(context.elements.name.value, "");
+  assert.equal(context.elements.join.clicked, false);
+
+  publishToJackbox(context, {
+    source: "jackbox-ai-dashboard",
+    type: "JBA_JOIN",
+    targetConnectorId: ready.connectorId,
     roomCode: "abcd",
     username: "ShrekBot"
   });

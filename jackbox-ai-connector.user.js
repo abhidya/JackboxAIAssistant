@@ -4,6 +4,8 @@
 // @version      1.2.0
 // @description  Bridges the GitHub Pages dashboard to a Jackbox tab and runs the autonomous Jackbox assistant panel.
 // @match        https://jackbox.tv/*
+// @match        http://localhost:4173/*
+// @match        http://127.0.0.1:4173/*
 // @match        https://abhidya.github.io/JackboxAIAssistant
 // @match        https://abhidya.github.io/JackboxAIAssistant/
 // @match        https://abhidya.github.io/JackboxAIAssistant/*
@@ -25,7 +27,9 @@
   const TO_JACKBOX_KEY = "jba:bridge:to-jackbox";
   const HEARTBEAT_KEY = "jba:bridge:jackbox-heartbeat";
   const CONTEXT_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  const DASHBOARD_URL_PATTERN = /^https:\/\/abhidya\.github\.io\/JackboxAIAssistant\/?/;
+  const CONNECTOR_ID = localStorage.getItem("jba:connector-id") || `jackbox-${CONTEXT_ID}`;
+  localStorage.setItem("jba:connector-id", CONNECTOR_ID);
+  const DASHBOARD_URL_PATTERN = /^(https:\/\/abhidya\.github\.io\/JackboxAIAssistant(?:\/|$)|https?:\/\/(?:localhost|127\.0\.0\.1):4173(?:\/|$))/;
   const isDashboardPage = DASHBOARD_URL_PATTERN.test(location.href);
   const isJackboxPage = location.hostname === "jackbox.tv";
   const PERSONAS = [
@@ -150,21 +154,26 @@
   }
 
   function postToDashboard(payload) {
-    const message = { source: SOURCE, ...payload };
+    const message = { source: SOURCE, connectorId: CONNECTOR_ID, ...payload };
     if (state.iframe && state.iframe.contentWindow) {
-      state.iframe.contentWindow.postMessage(message, "*");
+      state.iframe.contentWindow.postMessage(message, new URL(state.iframe.src).origin);
     }
     publishBridgeMessage(TO_DASHBOARD_KEY, message);
+  }
+
+  function isTrustedDashboardOrigin(origin) {
+    return origin === "https://abhidya.github.io" || origin === "http://localhost:4173" || origin === "http://127.0.0.1:4173";
   }
 
   function startDashboardBridge() {
     // Cross-origin pages cannot share DOM access, so the userscript relays through its own storage.
     subscribeToBridge(TO_DASHBOARD_KEY, (payload) => {
       if (payload?.source !== SOURCE) return;
-      window.postMessage(payload, "*");
+      window.postMessage(payload, location.origin);
     });
     window.addEventListener("message", (event) => {
       const data = event.data || {};
+      if (event.source !== window || event.origin !== location.origin) return;
       if (data.source !== DASHBOARD_SOURCE) return;
       publishBridgeMessage(TO_JACKBOX_KEY, data);
     });
@@ -172,12 +181,13 @@
       source: SOURCE,
       type: "JBA_BRIDGE_READY",
       href: location.href,
+      connectorId: CONNECTOR_ID,
       storage: hasUserscriptStorageBridge()
-    }, "*");
+    }, location.origin);
     if (hasUserscriptStorageBridge()) {
       Promise.resolve(getBridgeValue(HEARTBEAT_KEY, "")).then((raw) => {
         const heartbeat = parseBridgeEnvelope(raw);
-        if (heartbeat?.type === "JBA_READY") window.postMessage(heartbeat, "*");
+        if (heartbeat?.type === "JBA_READY") window.postMessage(heartbeat, location.origin);
       });
     }
   }
@@ -312,7 +322,7 @@
     if (promptId && current.promptId !== promptId) return log("Skipped stale answer", answer);
     if (state.submittedPrompts.has(current.promptId)) return;
     setNativeValue(current.input, answer);
-    if (current.submit) current.submit.click();
+    if (current.submit) clickElement(current.submit);
     state.submittedPrompts.add(current.promptId);
     if (state.pendingPrompt?.promptId === current.promptId) state.pendingPrompt = null;
     log("Submitted answer", answer);
@@ -371,6 +381,7 @@
 
   function handleDashboardMessage(data) {
     if (data.source !== DASHBOARD_SOURCE) return;
+    if (data.targetConnectorId && data.targetConnectorId !== CONNECTOR_ID) return;
     if (data.type === "JBA_DASHBOARD_PING") { if (data.config) state.config = { ...state.config, ...data.config }; saveConfig(); return; }
     if (data.type === "JBA_CONFIG") { state.config = { ...state.config, ...(data.config || {}) }; saveConfig(); log("Config updated", `${state.config.persona || "persona"}, ${state.config.style || "style"}`); return; }
     if (data.type === "JBA_ANSWER") { if (data.config) state.config = { ...state.config, ...data.config }; saveConfig(); if (state.config.autosubmit !== false) submitAnswer(data.answer, data.promptId); else log("Answer ready", data.answer || ""); return; }
@@ -381,10 +392,11 @@
   function startJackboxAutomation() {
     subscribeToBridge(TO_JACKBOX_KEY, handleDashboardMessage);
     window.addEventListener("message", (event) => {
+      if (event.origin && !isTrustedDashboardOrigin(event.origin)) return;
       handleDashboardMessage(event.data || {});
     });
     const publishReady = () => {
-      const ready = { source: SOURCE, type: "JBA_READY", href: location.href };
+      const ready = { source: SOURCE, type: "JBA_READY", href: location.href, connectorId: CONNECTOR_ID, playerName: state.config.playerName };
       publishBridgeMessage(HEARTBEAT_KEY, ready);
       publishBridgeMessage(TO_DASHBOARD_KEY, ready);
     };
