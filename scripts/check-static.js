@@ -26,6 +26,8 @@ for (const needle of ['app.js', 'styles.css', 'jackbox-ai-connector.user.js', 'I
 
 for (const needle of [
   '@match        https://jackbox.tv/*',
+  '@match        https://abhidya.github.io/JackboxAIAssistant',
+  '@match        https://abhidya.github.io/JackboxAIAssistant/',
   '@match        https://abhidya.github.io/JackboxAIAssistant/*',
   '@grant        GM_getValue',
   '@grant        GM_setValue',
@@ -33,6 +35,8 @@ for (const needle of [
   'TO_DASHBOARD_KEY',
   'TO_JACKBOX_KEY',
   'HEARTBEAT_KEY',
+  'JBA_BRIDGE_READY',
+  'reconnect|connect',
   'startDashboardBridge()',
   'startJackboxAutomation()'
 ]) {
@@ -42,6 +46,9 @@ for (const needle of [
 for (const needle of [
   'window.postMessage(message, "*")',
   'handleConnectorMessage',
+  'bridgeReady',
+  'JBA_BRIDGE_READY',
+  'JBA_DASHBOARD_PING',
   'generateWebLLMAnswer',
   'engine.chat.completions.create',
   'JBA_PROMPT',

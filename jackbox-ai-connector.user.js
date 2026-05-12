@@ -4,6 +4,7 @@
 // @version      1.2.0
 // @description  Bridges the GitHub Pages dashboard to a Jackbox tab and runs the autonomous Jackbox assistant panel.
 // @match        https://jackbox.tv/*
+// @match        https://abhidya.github.io/JackboxAIAssistant
 // @match        https://abhidya.github.io/JackboxAIAssistant/
 // @match        https://abhidya.github.io/JackboxAIAssistant/*
 // @grant        GM_info
@@ -167,6 +168,12 @@
       if (data.source !== DASHBOARD_SOURCE) return;
       publishBridgeMessage(TO_JACKBOX_KEY, data);
     });
+    window.postMessage({
+      source: SOURCE,
+      type: "JBA_BRIDGE_READY",
+      href: location.href,
+      storage: hasUserscriptStorageBridge()
+    }, "*");
     if (hasUserscriptStorageBridge()) {
       Promise.resolve(getBridgeValue(HEARTBEAT_KEY, "")).then((raw) => {
         const heartbeat = parseBridgeEnvelope(raw);
@@ -291,6 +298,14 @@
     element.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  function clickElement(element) {
+    try {
+      element.click();
+    } catch {
+      element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    }
+  }
+
   function submitAnswer(answer, promptId) {
     const current = findPromptState();
     if (!current) return log("Could not submit", "answer input not found");
@@ -307,7 +322,7 @@
     const candidates = [document.querySelector("#quiplash-startgame"), ...document.querySelectorAll("button, [role='button']")].filter(Boolean);
     const button = candidates.find((el) => /everyone'?s in|everybody'?s in/i.test(el.textContent || "") && visible(el));
     if (!button) return log("Everyone's In not found");
-    button.click();
+    clickElement(button);
     log("Clicked Everyone's In");
   }
 
@@ -317,18 +332,18 @@
     if (buttons.length < 2) return;
     const signature = buttons.map((button) => button.textContent.trim()).join("|");
     if (!signature || signature === state.lastVoteSignature) return;
-    buttons[Math.floor(Math.random() * buttons.length)].click();
+    clickElement(buttons[Math.floor(Math.random() * buttons.length)]);
     state.lastVoteSignature = signature;
     log("Auto-voted", signature);
   }
 
   function joinRoom(roomCode, username) {
     const room = document.querySelector("#roomcode, input[name='roomcode'], input[autocomplete='one-time-code']");
-    const name = document.querySelector("#username, input[name='username']");
+    const name = document.querySelector("#username, input[name='username'], input[name='name'], input[autocomplete='username']");
     if (roomCode && room) setNativeValue(room, String(roomCode).toUpperCase());
     if (username && name) setNativeValue(name, username);
-    const join = document.querySelector("#button-join") || [...document.querySelectorAll("button")].find((button) => /join|play/i.test(button.textContent || "") && visible(button));
-    if (join) { join.click(); log("Join requested", `${roomCode || ""} ${username || ""}`.trim()); }
+    const join = document.querySelector("#button-join") || [...document.querySelectorAll("button, [role='button']")].find((button) => /join|play|reconnect|connect|continue|start/i.test(button.textContent || "") && visible(button));
+    if (join) { clickElement(join); log("Join requested", `${roomCode || ""} ${username || ""}`.trim()); }
     else log("Join button not found");
   }
 
@@ -336,7 +351,7 @@
     const promptState = findPromptState();
     if (promptState && promptState.promptId !== state.lastPromptId && !state.submittedPrompts.has(promptState.promptId)) {
       state.lastPromptId = promptState.promptId;
-      if (state.iframe) {
+      if (state.iframe || hasUserscriptStorageBridge()) {
         state.pendingPrompt = { prompt: promptState.prompt, promptId: promptState.promptId, at: Date.now() };
         postToDashboard({ type: "JBA_PROMPT", prompt: promptState.prompt, promptId: promptState.promptId });
       } else if (state.config.autosubmit !== false) {
@@ -356,6 +371,7 @@
 
   function handleDashboardMessage(data) {
     if (data.source !== DASHBOARD_SOURCE) return;
+    if (data.type === "JBA_DASHBOARD_PING") { if (data.config) state.config = { ...state.config, ...data.config }; saveConfig(); return; }
     if (data.type === "JBA_CONFIG") { state.config = { ...state.config, ...(data.config || {}) }; saveConfig(); log("Config updated", `${state.config.persona || "persona"}, ${state.config.style || "style"}`); return; }
     if (data.type === "JBA_ANSWER") { if (data.config) state.config = { ...state.config, ...data.config }; saveConfig(); if (state.config.autosubmit !== false) submitAnswer(data.answer, data.promptId); else log("Answer ready", data.answer || ""); return; }
     if (data.type === "JBA_EVERYONES_IN") clickEveryonesIn();
@@ -367,7 +383,13 @@
     window.addEventListener("message", (event) => {
       handleDashboardMessage(event.data || {});
     });
-    window.setInterval(() => publishBridgeMessage(HEARTBEAT_KEY, { source: SOURCE, type: "JBA_READY", href: location.href }), 3000);
+    const publishReady = () => {
+      const ready = { source: SOURCE, type: "JBA_READY", href: location.href };
+      publishBridgeMessage(HEARTBEAT_KEY, ready);
+      publishBridgeMessage(TO_DASHBOARD_KEY, ready);
+    };
+    publishReady();
+    window.setInterval(publishReady, 3000);
     injectPanel();
     window.setInterval(scan, 900);
   }

@@ -38,6 +38,7 @@
     autosubmit: localStorage.getItem("jba:autosubmit") !== "false",
     autovote: localStorage.getItem("jba:autovote") === "true",
     connected: false,
+    bridgeReady: false,
     lastPrompt: "",
     webllmEngine: null,
     webllmLoadPromise: null,
@@ -107,7 +108,9 @@
       status.className = `status ${state.connected ? "connected" : "disconnected"}`;
       status.textContent = state.connected
         ? "Connected to the jackbox.tv userscript bridge."
-        : "Dashboard mode. Keep this tab open, then open jackbox.tv in another tab for automation.";
+        : state.bridgeReady
+          ? "Dashboard userscript relay is active. Open jackbox.tv in another tab to connect automation."
+          : "Dashboard mode. If this stays here, reinstall/update the userscript, then reload this page.";
     }
   }
 
@@ -235,10 +238,23 @@
     log("Sent config", `${shortName(state.persona)}, ${state.style}`);
   }
 
+  function pingConnector() {
+    sendToConnector({ type: "JBA_DASHBOARD_PING", config: currentConfig(), at: Date.now() });
+  }
+
   async function handleConnectorMessage(event) {
     const data = event.data || {};
     if (data.source !== "jackbox-ai-connector") return;
+
+    if (data.type === "JBA_BRIDGE_READY") {
+      state.bridgeReady = true;
+      syncControls();
+      log("Dashboard userscript relay ready", data.storage ? "storage bridge available" : "storage bridge unavailable");
+      return;
+    }
+
     state.connected = true;
+    state.bridgeReady = true;
     syncControls();
 
     if (data.type === "JBA_READY") {
@@ -309,12 +325,14 @@
     });
 
     window.addEventListener("message", handleConnectorMessage);
+    window.setInterval(pingConnector, 3000);
   }
 
   renderPersonas();
   wireControls();
   syncControls();
   syncGenerationButtons();
+  pingConnector();
   if (window.parent && window.parent !== window) {
     sendToConnector({ type: "JBA_DASHBOARD_READY", config: currentConfig() });
   }
