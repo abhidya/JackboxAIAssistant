@@ -34,6 +34,31 @@
     ["SpongeBob SquarePants (SpongeBob)", "Assets/avatars/spongebob.jpg"],
     ["Tony Stark (Marvel)", "Assets/avatars/tonystark.jpg"]
   ]);
+  const DEFAULT_BOT_PERSONAS = [
+    "Shrek (Shrek)",
+    "SpongeBob SquarePants (SpongeBob)",
+    "Deadpool (Marvel Comics)",
+    "Tony Stark (Marvel)",
+    "Rick Sanchez (Rick and Morty)"
+  ];
+
+  function defaultBotSlots(count = 5) {
+    return Array.from({ length: count }, (_, index) => ({
+      slotId: `bot-${index + 1}`,
+      name: `Bot${index + 1}`,
+      persona: DEFAULT_BOT_PERSONAS[index % DEFAULT_BOT_PERSONAS.length],
+      connectorId: "",
+      status: "waiting"
+    }));
+  }
+
+  function loadBotSlots() {
+    try {
+      const saved = JSON.parse(localStorage.getItem("jba:botSlots") || "[]");
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch {}
+    return defaultBotSlots(5);
+  }
 
   const state = {
     persona: localStorage.getItem("jba:persona") || PERSONAS[14].name,
@@ -48,8 +73,8 @@
     bridgeReady: false,
     activeConnectorId: localStorage.getItem("jba:activeConnectorId") || "",
     connectors: new Map(),
+    botSlots: loadBotSlots(),
     lastPromptId: "",
-    companionUrl: localStorage.getItem("jba:companionUrl") || "http://127.0.0.1:5174",
     webllmEngine: null,
     webllmLoadPromise: null,
     loadingModel: false
@@ -79,6 +104,7 @@
     localStorage.setItem("jba:playerName", state.playerName);
     localStorage.setItem("jba:autosubmit", String(state.autosubmit));
     localStorage.setItem("jba:autovote", String(state.autovote));
+    localStorage.setItem("jba:botSlots", JSON.stringify(state.botSlots));
   }
 
   function renderPersonas() {
@@ -115,6 +141,7 @@
     if ($("room-code")) $("room-code").value = state.roomCode;
     if ($("player-name")) $("player-name").value = state.playerName || `${shortName(state.persona).replace(/[^a-z0-9]/gi, "")}Bot`.slice(0, 16);
     syncConnectorSelect();
+    renderBotSlots();
     if ($("autosubmit-toggle")) $("autosubmit-toggle").checked = state.autosubmit;
     if ($("autovote-toggle")) $("autovote-toggle").checked = state.autovote;
     const status = $("bridge-status");
@@ -143,13 +170,6 @@
 
   function setModelStatus(message, ok = false) {
     const status = $("model-status");
-    if (!status) return;
-    status.className = `status ${ok ? "connected" : "disconnected"}`;
-    status.textContent = message;
-  }
-
-  function setCompanionStatus(message, ok = false) {
-    const status = $("companion-status");
     if (!status) return;
     status.className = `status ${ok ? "connected" : "disconnected"}`;
     status.textContent = message;
@@ -231,6 +251,36 @@
     if ($("generate-button")) $("generate-button").disabled = state.loadingModel;
   }
 
+  function botCount() {
+    return Math.max(1, Math.min(8, Number($("bot-count")?.value || state.botSlots.length || 5)));
+  }
+
+  function botPrefix() {
+    return ($("bot-prefix")?.value || "Bot").replace(/[^a-z0-9 _-]/gi, "").trim().slice(0, 12) || "Bot";
+  }
+
+  function ensureBotSlots(count = botCount()) {
+    if (state.botSlots.length === count) return;
+    const existing = new Map(state.botSlots.map((slot) => [slot.slotId, slot]));
+    state.botSlots = defaultBotSlots(count).map((slot) => existing.get(slot.slotId) || slot);
+    saveState();
+    renderBotSlots();
+  }
+
+  function botSlotUrl(slotId) {
+    return `https://jackbox.tv/?jbaSlot=${encodeURIComponent(slotId)}`;
+  }
+
+  function renderBotSlots() {
+    const host = $("bot-slots");
+    if (!host) return;
+    host.innerHTML = state.botSlots.map((slot, index) => {
+      const connected = Boolean(slot.connectorId);
+      const persona = shortName(slot.persona);
+      return `<div class="bot-slot" data-slot-id="${escapeHtml(slot.slotId)}"><strong>${escapeHtml(slot.name || `Bot${index + 1}`)}</strong><span><small>${escapeHtml(persona)} · ${escapeHtml(slot.connectorId ? slot.connectorId.slice(-8) : "waiting for tab")}</small></span><small class="${connected ? "connected" : "waiting"}">${connected ? "connected" : "waiting"}</small></div>`;
+    }).join("");
+  }
+
   function syncConnectorSelect() {
     const select = $("connector-select");
     if (!select) return;
@@ -256,12 +306,22 @@
     } catch {}
     const label = data.playerName ? `${data.playerName} (${urlLabel})` : `${urlLabel} ${data.connectorId.slice(-6)}`;
     state.connectors.set(data.connectorId, { ...existing, connectorId: data.connectorId, href: data.href || existing.href || "", label, seenAt: Date.now() });
+    if (data.slotId) {
+      const slot = state.botSlots.find((item) => item.slotId === data.slotId);
+      if (slot) {
+        slot.connectorId = data.connectorId;
+        slot.status = "connected";
+        if (data.playerName) slot.name = data.playerName;
+        saveState();
+      }
+    }
     if (!state.activeConnectorId) {
       state.activeConnectorId = data.connectorId;
       localStorage.setItem("jba:activeConnectorId", state.activeConnectorId);
     }
     state.connected = true;
     syncConnectorSelect();
+    renderBotSlots();
   }
 
   function isTrustedConnectorEvent(event) {
@@ -298,41 +358,43 @@
     log("Sent config", `${shortName(state.persona)}, ${state.style}`);
   }
 
-  async function companionRequest(path, options = {}) {
-    const response = await fetch(`${state.companionUrl}${path}`, {
-      method: options.method || "GET",
-      headers: { "content-type": "application/json" },
-      body: options.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `Companion request failed (${response.status})`);
-    return data;
+  function configForSlot(slot) {
+    return { ...currentConfig(), persona: slot.persona || state.persona, playerName: slot.name || state.playerName };
   }
 
-  async function refreshCompanionStatus() {
-    try {
-      const data = await companionRequest("/api/bots");
-      setCompanionStatus(`Local companion connected. ${data.running || 0} bot${data.running === 1 ? "" : "s"} running.`, true);
-    } catch {
-      setCompanionStatus("Local companion not connected. Run `npm run companion` locally.");
+  function launchBotTabs() {
+    ensureBotSlots(botCount());
+    const prefix = botPrefix();
+    state.botSlots = state.botSlots.map((slot, index) => ({ ...slot, name: `${prefix}${index + 1}` }));
+    saveState();
+    renderBotSlots();
+    for (const slot of state.botSlots) {
+      window.open(botSlotUrl(slot.slotId), `jba-${slot.slotId}`);
     }
+    log("Launched bot tabs", `${state.botSlots.length} requested`);
   }
 
-  async function startCompanionBots() {
-    const count = Number($("companion-count")?.value || 5);
-    const baseName = $("companion-prefix")?.value || "Bot";
-    const headless = $("companion-headless")?.checked !== false;
-    const body = {
-      roomCode: state.roomCode,
-      count,
-      baseName,
-      style: state.style,
-      autovote: state.autovote,
-      headless
-    };
-    const data = await companionRequest("/api/bots/start", { method: "POST", body });
-    setCompanionStatus(`Started ${data.running || 0} local bot${data.running === 1 ? "" : "s"}.`, true);
-    log("Started local companion bots", `${data.running || 0} in room ${state.roomCode}`);
+  function joinAllBots() {
+    const roomCode = state.roomCode;
+    if (!roomCode || roomCode.length !== 4) return log("Join all failed", "enter a 4-letter room code first");
+    let sent = 0;
+    for (const slot of state.botSlots) {
+      if (!slot.connectorId) continue;
+      sendToConnector({ type: "JBA_CONFIG", config: configForSlot(slot) }, { targetConnectorId: slot.connectorId });
+      sendToConnector({ type: "JBA_JOIN", roomCode, username: slot.name }, { targetConnectorId: slot.connectorId });
+      sent += 1;
+    }
+    log("Join all sent", `${sent}/${state.botSlots.length} connected bot tabs`);
+  }
+
+  function sendAllConfig() {
+    let sent = 0;
+    for (const slot of state.botSlots) {
+      if (!slot.connectorId) continue;
+      sendToConnector({ type: "JBA_CONFIG", config: configForSlot(slot) }, { targetConnectorId: slot.connectorId });
+      sent += 1;
+    }
+    log("Config all sent", `${sent}/${state.botSlots.length} connected bot tabs`);
   }
 
   function pingConnector() {
@@ -414,31 +476,10 @@
       }
     });
     $("everyone-in")?.addEventListener("click", () => sendToConnector({ type: "JBA_EVERYONES_IN" }));
-    $("companion-start")?.addEventListener("click", async () => {
-      try {
-        await startCompanionBots();
-      } catch (error) {
-        setCompanionStatus(error.message);
-        log("Companion start failed", error.message);
-      }
-    });
-    $("companion-stop")?.addEventListener("click", async () => {
-      try {
-        const data = await companionRequest("/api/bots/stop", { method: "POST", body: {} });
-        setCompanionStatus(`Stopped local bots. ${data.running || 0} running.`, true);
-        log("Stopped local companion bots");
-      } catch (error) {
-        setCompanionStatus(error.message);
-      }
-    });
-    $("companion-everyone")?.addEventListener("click", async () => {
-      try {
-        const data = await companionRequest("/api/bots/everyones-in", { method: "POST", body: {} });
-        setCompanionStatus(data.clicked ? `Clicked Everyone's In from ${data.bot}.` : "No companion bot has Everyone's In visible.", data.clicked);
-      } catch (error) {
-        setCompanionStatus(error.message);
-      }
-    });
+    $("bot-count")?.addEventListener("input", () => ensureBotSlots(botCount()));
+    $("launch-bot-tabs")?.addEventListener("click", launchBotTabs);
+    $("join-all-bots")?.addEventListener("click", joinAllBots);
+    $("send-all-config")?.addEventListener("click", sendAllConfig);
     $("generate-button")?.addEventListener("click", async () => {
       const prompt = $("prompt-input")?.value || "";
       const list = $("candidate-list");
@@ -455,7 +496,6 @@
 
     window.addEventListener("message", handleConnectorMessage);
     window.setInterval(pingConnector, 3000);
-    window.setInterval(refreshCompanionStatus, 5000);
   }
 
   renderPersonas();
@@ -463,7 +503,6 @@
   syncControls();
   syncGenerationButtons();
   pingConnector();
-  refreshCompanionStatus();
   if (window.parent && window.parent !== window) {
     sendToConnector({ type: "JBA_DASHBOARD_READY", config: currentConfig() });
   }

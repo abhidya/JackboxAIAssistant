@@ -8,6 +8,7 @@ This repository is now **GitHub Pages-first**. The main app is a static website 
 - Lets users install a userscript connector for both the deployed dashboard and `https://jackbox.tv/*`.
 - Uses the deployed GitHub Pages dashboard as the primary control surface.
 - Injects a compact fallback assistant panel into Jackbox.
+- Can launch and track multiple Jackbox bot tabs from one dashboard click.
 - Detects visible Quiplash-style prompts in the Jackbox page.
 - Generates short persona answers in the dashboard with WebLLM running in the browser.
 - Fills and submits answers through the real Jackbox page DOM.
@@ -33,27 +34,15 @@ The old Python files are archived under `legacy/python/` as text snapshots for m
    - Greasemonkey/Violentmonkey where preferred.
 3. Click **Install connector** on the site. This opens `jackbox-ai-connector.user.js` in the userscript manager.
 4. Keep the deployed GitHub Pages dashboard open.
-5. Open `https://jackbox.tv` in another tab. This tab is still required because browser security only allows the userscript to click and type inside a page where it is running.
-6. Choose the connected Jackbox tab in the dashboard's **Jackbox tab** selector.
-7. Enter room code, player name, persona, style, and automation settings in the deployed dashboard.
-8. Click **Fill/join room** from the deployed dashboard, or join manually in the Jackbox tab.
-9. When a prompt appears, the Jackbox-side connector relays it to the deployed dashboard, receives an answer, and submits it if auto-submit is enabled.
+5. Enter the room code in the dashboard.
+6. Set **Bot count** to `5` and click **Launch bot tabs**. The browser opens one `jackbox.tv` tab per bot.
+7. Wait for the bot slots to show as connected.
+8. Click **Join all bots**.
+9. When a prompt appears, each Jackbox-side connector relays it to the deployed dashboard, receives an answer, and submits it if auto-submit is enabled.
 
-One browser tab represents one AI player. Open more Jackbox tabs/windows for more bots, then select the target tab before sending join/config/start commands.
+One browser tab represents one AI player. The dashboard can launch and route commands to those tabs, but browser-only JavaScript cannot create multiple Jackbox player sessions inside one actual Jackbox tab.
 
 The deployed page can now run the control UI directly, but it still cannot directly access Jackbox DOM from its own origin. The userscript bridges the deployed dashboard tab and the Jackbox tab through userscript storage events.
-
-## No-tab local companion
-
-For five bots without opening five Jackbox tabs yourself, run the optional local companion. It launches isolated Chromium contexts from your machine and can run headless, so the dashboard is the only visible browser tab.
-
-```bash
-npm install
-npx playwright install chromium
-npm run companion
-```
-
-Then open the dashboard, enter the room code, set **Bot count** to `5`, keep **Run without visible browser windows** checked, and click **Start local bots**. The companion uses the local deterministic answer generator, not WebLLM, because the bots run outside the dashboard tab.
 
 ## Deploy to GitHub Pages
 
@@ -102,8 +91,6 @@ Run `npm test` before deploying. The check compiles the dashboard JavaScript and
 | `scripts/build-static.js` | Copies deployable static files into `dist/` |
 | `scripts/check-static.js` | Syntax/wiring smoke check |
 | `scripts/test-automation.js` | Userscript bridge and automation business-logic test |
-| `scripts/companion-server.js` | Optional local no-tab/headless bot runner |
-| `scripts/test-companion.js` | Companion bot config and answer business-logic test |
 | `legacy/python/` | Archived pre-static Python implementation snapshots, stored as text only |
 
 ## Connector bridge protocol
@@ -116,7 +103,7 @@ Connector → dashboard:
 - `JBA_PROMPT` — visible prompt detected; includes `prompt` and `promptId`.
 - `JBA_LOG` — status/debug message.
 
-Connector messages include `connectorId`; the dashboard uses it to target one Jackbox tab instead of broadcasting commands to every tab.
+Connector messages include `connectorId` and, for launched bot tabs, `slotId`; the dashboard uses these to target one Jackbox tab instead of broadcasting commands to every tab.
 
 Dashboard → connector:
 
@@ -142,4 +129,4 @@ The bridge contract remains `JBA_PROMPT` → `JBA_ANSWER`, so a future Transform
 - One tab is one bot. The static dashboard can target individual connected tabs, but each tab still needs its own browser page/session.
 - Browser/userscript permissions and extension policies vary by browser.
 - WebLLM requires WebGPU and model downloads; unsupported browsers show a model error in the dashboard.
-- No-tab mode requires a local Node process and Playwright-managed Chromium.
+- Popup blockers may prevent launching several bot tabs unless **Launch bot tabs** is clicked directly by the user.

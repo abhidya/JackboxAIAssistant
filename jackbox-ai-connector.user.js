@@ -29,6 +29,8 @@
   const CONTEXT_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   const CONNECTOR_ID = localStorage.getItem("jba:connector-id") || `jackbox-${CONTEXT_ID}`;
   localStorage.setItem("jba:connector-id", CONNECTOR_ID);
+  const SLOT_ID = new URLSearchParams(location.search).get("jbaSlot") || localStorage.getItem("jba:slot-id") || "";
+  if (SLOT_ID) localStorage.setItem("jba:slot-id", SLOT_ID);
   const DASHBOARD_URL_PATTERN = /^(https:\/\/abhidya\.github\.io\/JackboxAIAssistant(?:\/|$)|https?:\/\/(?:localhost|127\.0\.0\.1):4173(?:\/|$))/;
   const isDashboardPage = DASHBOARD_URL_PATTERN.test(location.href);
   const isJackboxPage = location.hostname === "jackbox.tv";
@@ -154,7 +156,7 @@
   }
 
   function postToDashboard(payload) {
-    const message = { source: SOURCE, connectorId: CONNECTOR_ID, ...payload };
+    const message = { source: SOURCE, connectorId: CONNECTOR_ID, slotId: SLOT_ID, ...payload };
     if (state.iframe && state.iframe.contentWindow) {
       state.iframe.contentWindow.postMessage(message, new URL(state.iframe.src).origin);
     }
@@ -182,6 +184,7 @@
       type: "JBA_BRIDGE_READY",
       href: location.href,
       connectorId: CONNECTOR_ID,
+      slotId: SLOT_ID,
       storage: hasUserscriptStorageBridge()
     }, location.origin);
     if (hasUserscriptStorageBridge()) {
@@ -396,7 +399,7 @@
       handleDashboardMessage(event.data || {});
     });
     const publishReady = () => {
-      const ready = { source: SOURCE, type: "JBA_READY", href: location.href, connectorId: CONNECTOR_ID, playerName: state.config.playerName };
+      const ready = { source: SOURCE, type: "JBA_READY", href: location.href, connectorId: CONNECTOR_ID, slotId: SLOT_ID, playerName: state.config.playerName };
       publishBridgeMessage(HEARTBEAT_KEY, ready);
       publishBridgeMessage(TO_DASHBOARD_KEY, ready);
     };

@@ -31,9 +31,9 @@
           <li><strong>Install Tampermonkey or Greasemonkey.</strong> The connector is a userscript, so it needs a userscript manager.</li>
           <li><strong>Install this connector:</strong> <a href="jackbox-ai-connector.user.js">jackbox-ai-connector.user.js</a>.</li>
           <li><strong>Keep this dashboard open.</strong> The connector also runs here and relays commands to Jackbox.</li>
-          <li><strong>Open <code>jackbox.tv</code>.</strong> The Jackbox tab is still required because only that page can expose its prompt and input DOM to the userscript.</li>
-          <li><strong>Select a connected Jackbox tab, persona, and automation mode here.</strong> Commands are routed to the selected tab.</li>
-          <li><strong>Use more tabs for more bots.</strong> Each Jackbox tab represents one autonomous AI player.</li>
+          <li><strong>Enter a room code and launch bot tabs.</strong> Each Jackbox tab is one autonomous player session.</li>
+          <li><strong>Click Join all bots.</strong> The dashboard routes names/config to each connected tab.</li>
+          <li><strong>Keep the dashboard open.</strong> Prompts are relayed here, answered with WebLLM, and sent back to each tab.</li>
         </ol>
         <div class="notice">
           <strong>Important:</strong> this static edition controls the assistant from the deployed page, then automates the actual Jackbox web page through a userscript running in the Jackbox tab. It does not reverse-engineer private Jackbox APIs and does not require a Python/Flask/Selenium server.
@@ -86,6 +86,27 @@
 
       <section class="card">
         <div class="section-heading">
+          <p class="eyebrow">Bot launcher</p>
+          <h2>Five-tab setup</h2>
+        </div>
+        <div class="field-stack">
+          <label>Bot count
+            <input id="bot-count" type="number" min="1" max="8" value="5">
+          </label>
+          <label>Bot name prefix
+            <input id="bot-prefix" type="text" value="Bot">
+          </label>
+        </div>
+        <div class="button-row">
+          <button id="launch-bot-tabs" class="primary">Launch bot tabs</button>
+          <button id="join-all-bots">Join all bots</button>
+          <button id="send-all-config">Send config all</button>
+        </div>
+        <div id="bot-slots" class="bot-slots"></div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
           <p class="eyebrow">Prompt Lab</p>
           <h2>Test browser generation</h2>
         </div>
@@ -94,28 +115,6 @@
         </label>
         <button id="generate-button" class="primary">Generate candidates</button>
         <ul id="candidate-list" class="candidate-list"></ul>
-      </section>
-
-      <section class="card">
-        <div class="section-heading">
-          <p class="eyebrow">Local companion</p>
-          <h2>No-tab bot launcher</h2>
-        </div>
-        <div id="companion-status" class="status disconnected">Local companion not connected.</div>
-        <div class="field-stack">
-          <label>Bot count
-            <input id="companion-count" type="number" min="1" max="8" value="5">
-          </label>
-          <label>Bot name prefix
-            <input id="companion-prefix" type="text" value="Bot">
-          </label>
-          <label class="check-row"><input id="companion-headless" type="checkbox" checked> Run without visible browser windows</label>
-        </div>
-        <div class="button-row">
-          <button id="companion-start" class="primary">Start local bots</button>
-          <button id="companion-stop">Stop local bots</button>
-          <button id="companion-everyone">Companion Everyone's In</button>
-        </div>
       </section>
 
       <section class="card wide">

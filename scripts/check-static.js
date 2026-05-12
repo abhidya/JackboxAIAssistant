@@ -38,6 +38,7 @@ for (const needle of [
   'TO_JACKBOX_KEY',
   'HEARTBEAT_KEY',
   'CONNECTOR_ID',
+  'SLOT_ID',
   'targetConnectorId',
   'JBA_BRIDGE_READY',
   'reconnect|connect',
@@ -54,8 +55,9 @@ for (const needle of [
   'JBA_BRIDGE_READY',
   'JBA_DASHBOARD_PING',
   'connector-select',
-  'companion-start',
-  'companionRequest',
+  'launch-bot-tabs',
+  'join-all-bots',
+  'botSlots',
   'activeConnectorId',
   'lastPromptId',
   'targetConnectorId',
@@ -79,7 +81,8 @@ for (const forbidden of [
 
 for (const needle of [
   'Keep this dashboard open',
-  'Jackbox tab is still required'
+  'Each Jackbox tab is one autonomous player session',
+  'Launch bot tabs'
 ]) {
   assertIncludes(html, needle, 'index.html');
 }
@@ -89,7 +92,7 @@ for (const needle of [
   'npm test',
   'bridge contract',
   'WebLLM for dashboard generation',
-  'npm run companion'
+  'Launch bot tabs'
 ]) {
   assertIncludes(readme, needle, 'README.md');
 }

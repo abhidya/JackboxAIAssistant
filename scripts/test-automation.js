@@ -34,7 +34,7 @@ class TestElement {
   set value(value) { this._value = value; }
 }
 
-function createSandbox() {
+function createSandbox(href = "https://jackbox.tv/") {
   const prompt = new TestElement("h1", { id: "question-text", textContent: "A bad thing to say at a wedding" });
   const answer = new TestElement("input", { id: "quiplash-answer-input" });
   const submit = new TestElement("button", { id: "quiplash-submit-answer", textContent: "Submit" });
@@ -82,7 +82,8 @@ function createSandbox() {
 
   const sandbox = {
     console: { log() {}, warn() {} },
-    location: { href: "https://jackbox.tv/", hostname: "jackbox.tv" },
+    URLSearchParams,
+    location: { href, hostname: new URL(href).hostname, search: new URL(href).search },
     localStorage: {
       getItem: (key) => localStorageData[key] || null,
       setItem: (key, value) => { localStorageData[key] = String(value); }
@@ -147,8 +148,8 @@ function publishToJackbox(context, payload) {
   context.listeners["jba:bridge:to-jackbox"]("jba:bridge:to-jackbox", "", raw);
 }
 
-function runConnector() {
-  const context = createSandbox();
+function runConnector(href) {
+  const context = createSandbox(href);
   vm.runInNewContext(source, context.sandbox, { filename: "jackbox-ai-connector.user.js" });
   return context;
 }
@@ -190,9 +191,10 @@ function runConnector() {
 }
 
 {
-  const context = runConnector();
+  const context = runConnector("https://jackbox.tv/?jbaSlot=bot-3");
   const ready = context.bridgeMessages.map((message) => bridgePayload(message.value)).find((payload) => payload.type === "JBA_READY");
   assert.ok(ready?.connectorId, "ready should include connector id");
+  assert.equal(ready.slotId, "bot-3");
 
   publishToJackbox(context, {
     source: "jackbox-ai-dashboard",
