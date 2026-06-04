@@ -79,6 +79,20 @@ The userscript includes local dashboard matches for `http://localhost:4173/*` an
 
 Run `npm test` before deploying. The check compiles the dashboard JavaScript and userscript, verifies the static bridge contract, and runs business-logic coverage for prompt relay, targeted answer submission, and targeted room joining.
 
+## Local smoke demo
+
+```bash
+npm install
+npm test
+npm run build
+npm run serve
+```
+
+Open `http://127.0.0.1:4173/`, click **Install connector**, and confirm the
+userscript manager shows the local dashboard matches. A full game demo still
+requires a live `jackbox.tv` room and one browser tab per bot; the local smoke
+path verifies the static dashboard, connector bundle, and bridge contract only.
+
 ## Static app files
 
 | Path | Purpose |
